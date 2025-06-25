@@ -1,29 +1,31 @@
-import tkinter as tk
-# from tkinter import ttk, filedialog, messagebox
-# import matplotlib
-# import matplotlib.pyplot as plt
-# from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
-# from matplotlib.figure import Figure
-# import seaborn as sns
-# import matplotlib.dates as mdates
+# main.py
+"""
+Main entry point for the Cloud Probe Data Analyzer application.
+"""
 
-# #Imports the other modules in the same directory
-# from controller import * #provides utility functions for common tasks
-# from gui import * #The central hub that interfaces with the user
-# from constants import * #Constants and global variables
-# from plotting import * #functions that handle visualization
-# from data_processing import * #functions that handle file loading and data frame manipulation
-# from modern_calibration_window import * #handles the calibration window for the PAX data
+import tkinter as tk
+from gui.main_window import MainWindow
+from utils.logger import setup_logger
+import logging
 
 def main():
-    """
-    Entry point for the application.
-    Initializes the Tkinter root window and starts the main loop.
-    """
-    root = tk.Tk()  # Create the root window
-    app = CloudProbeView(root)  # Instantiate the PAXView class
-    app.mainloop()  # Start the Tkinter main loop
+    """Initialize and run the application."""
+    # Setup logging
+    setup_logger()
+    logger = logging.getLogger(__name__)
+    logger.info("Starting Cloud Probe Data Analyzer")
+    
+    # Create and run the application
+    root = tk.Tk()
+    app = MainWindow(root)
+    
+    try:
+        root.mainloop()
+    except Exception as e:
+        logger.error(f"Application error: {e}")
+        raise
+    finally:
+        logger.info("Application closed")
 
-#If this file is run as a script, call the main function
 if __name__ == "__main__":
     main()
