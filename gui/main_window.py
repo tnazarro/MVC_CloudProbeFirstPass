@@ -7,6 +7,8 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import logging
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+import matplotlib.pyplot as plt
+
 
 from core.data_processor import ParticleDataProcessor
 from core.plotter import ParticlePlotter
@@ -21,6 +23,9 @@ class MainWindow:
         self.root = root
         self.root.title("Particle Data Analyzer")
         self.root.geometry("1200x800")
+        
+        # Set up proper close handling
+        self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
         
         # Initialize core components
         self.data_processor = ParticleDataProcessor()
@@ -228,24 +233,66 @@ class MainWindow:
         frequency_data = self.data_processor.get_frequency_data()
         
         if size_data is not None:
+            # Clear the existing plot properly
+            if hasattr(self, 'canvas') and self.canvas.figure:
+                self.canvas.figure.clear()
+            
+            # Create new plot
             figure = self.plotter.create_histogram(
                 size_data, frequency_data, self.bin_count_var.get()
             )
+            
             if figure is not None:
+                # Update the canvas with the new figure
                 self.canvas.figure = figure
                 self.canvas.draw()
     
     def _display_plot(self, figure):
         """Display the plot in the GUI."""
-        # Clear existing plot if any
+        # Clear existing plot widgets completely
         for widget in self.plot_frame.winfo_children():
             widget.destroy()
         
-        # Create canvas
+        # Clear any existing matplotlib figures
+        if hasattr(self, 'canvas'):
+            if hasattr(self.canvas, 'figure') and self.canvas.figure:
+                plt.close(self.canvas.figure)
+            del self.canvas
+        
+        # Create new canvas with the figure
         self.canvas = FigureCanvasTkAgg(figure, self.plot_frame)
         self.canvas.draw()
-        self.canvas.get_tk_widget().pack(fill='both', expand=True)
+        
+        # Pack the canvas widget
+        canvas_widget = self.canvas.get_tk_widget()
+        canvas_widget.pack(fill='both', expand=True)
         
         # Add toolbar
         toolbar = NavigationToolbar2Tk(self.canvas, self.plot_frame)
         toolbar.update()
+    
+    def _on_closing(self):
+        """Handle application closing cleanly."""
+        try:
+            # Close matplotlib figures properly
+            if hasattr(self, 'canvas'):
+                if hasattr(self.canvas, 'figure') and self.canvas.figure:
+                    plt.close(self.canvas.figure)
+                del self.canvas
+            
+            # Close plotter figures
+            if hasattr(self.plotter, 'figure') and self.plotter.figure:
+                plt.close(self.plotter.figure)
+            
+            # Close all remaining matplotlib figures
+            plt.close('all')
+            
+            # Destroy the root window
+            self.root.quit()
+            self.root.destroy()
+            
+        except Exception as e:
+            logger.error(f"Error during cleanup: {e}")
+            # Force exit if cleanup fails
+            import sys
+            sys.exit(0)

@@ -10,6 +10,10 @@ import logging
 from typing import Optional, Tuple
 from config.constants import PLOT_WIDTH, PLOT_HEIGHT, PLOT_DPI, DEFAULT_BIN_COUNT
 
+# Set matplotlib to use Agg backend before importing pyplot to avoid threading issues
+import matplotlib
+matplotlib.use('Agg')
+
 logger = logging.getLogger(__name__)
 
 class ParticlePlotter:
@@ -39,6 +43,10 @@ class ParticlePlotter:
             matplotlib Figure object
         """
         try:
+            # Close any existing figure to prevent memory leaks
+            if self.figure is not None:
+                plt.close(self.figure)
+            
             # Create figure and axis
             self.figure = plt.figure(figsize=(PLOT_WIDTH, PLOT_HEIGHT), dpi=PLOT_DPI)
             self.ax = self.figure.add_subplot(111)
