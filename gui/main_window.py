@@ -1,4 +1,3 @@
-# gui/main_window.py
 """
 Main GUI window for the Particle Data Analyzer.
 """
@@ -8,7 +7,6 @@ from tkinter import ttk, filedialog, messagebox
 import logging
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 import matplotlib.pyplot as plt
-
 
 from core.data_processor import ParticleDataProcessor
 from core.plotter import ParticlePlotter
@@ -37,6 +35,7 @@ class MainWindow:
         self.frequency_column_var = tk.StringVar()
         self.random_count_var = tk.IntVar(value=RANDOM_DATA_BOUNDS['default_n'])
         self.distribution_var = tk.StringVar(value='lognormal')
+        self.show_stats_lines_var = tk.BooleanVar(value=True)
         
         self._create_widgets()
         self._create_layout()
@@ -96,14 +95,21 @@ class MainWindow:
         self.bin_label = ttk.Label(self.control_frame, text=str(DEFAULT_BIN_COUNT))
         self.bin_label.grid(row=7, column=2, pady=2)
         
+        # Statistical lines toggle
+        self.stats_lines_check = ttk.Checkbutton(self.control_frame, 
+                                                text="Show Mean & Std Dev Lines", 
+                                                variable=self.show_stats_lines_var,
+                                                command=self._on_stats_toggle)
+        self.stats_lines_check.grid(row=8, column=0, columnspan=2, sticky='w', pady=2)
+        
         # Plot button
         self.plot_button = ttk.Button(self.control_frame, text="Create Plot", 
                                      command=self.create_plot, state='disabled')
-        self.plot_button.grid(row=8, column=0, columnspan=2, sticky='ew', pady=10)
+        self.plot_button.grid(row=9, column=0, columnspan=2, sticky='ew', pady=10)
         
         # Stats display
         self.stats_frame = ttk.LabelFrame(self.control_frame, text="Data Info", padding=5)
-        self.stats_frame.grid(row=9, column=0, columnspan=3, sticky='ew', pady=5)
+        self.stats_frame.grid(row=10, column=0, columnspan=3, sticky='ew', pady=5)
         
         self.stats_text = tk.Text(self.stats_frame, height=6, width=30)
         self.stats_text.pack(fill='both', expand=True)
@@ -201,6 +207,12 @@ class MainWindow:
         if hasattr(self, 'canvas') and self.data_processor.data is not None:
             self._update_plot()
     
+    def _on_stats_toggle(self):
+        """Handle statistical lines toggle change."""
+        # If we have a current plot, update it
+        if hasattr(self, 'canvas') and self.data_processor.data is not None:
+            self._update_plot()
+    
     def create_plot(self):
         """Create and display the histogram plot."""
         # Update column selections
@@ -218,7 +230,8 @@ class MainWindow:
         
         # Create the plot
         figure = self.plotter.create_histogram(
-            size_data, frequency_data, self.bin_count_var.get()
+            size_data, frequency_data, self.bin_count_var.get(),
+            show_stats_lines=self.show_stats_lines_var.get()
         )
         
         if figure is not None:
@@ -239,7 +252,8 @@ class MainWindow:
             
             # Create new plot
             figure = self.plotter.create_histogram(
-                size_data, frequency_data, self.bin_count_var.get()
+                size_data, frequency_data, self.bin_count_var.get(),
+                show_stats_lines=self.show_stats_lines_var.get()
             )
             
             if figure is not None:
