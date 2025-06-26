@@ -47,8 +47,9 @@ class ParticlePlotter:
             # Close any existing figure to prevent memory leaks
             if self.figure is not None:
                 plt.close(self.figure)
+                self.figure = None
             
-            # Create figure and axis
+            # Create figure with explicit new figure number to avoid ID conflicts
             self.figure = plt.figure(figsize=(PLOT_WIDTH, PLOT_HEIGHT), dpi=PLOT_DPI)
             self.ax = self.figure.add_subplot(111)
             
@@ -168,12 +169,11 @@ class ParticlePlotter:
     def update_bin_count(self, size_data: np.ndarray, frequency_data: Optional[np.ndarray], 
                         new_bin_count: int, show_stats_lines: bool = True):
         """Update the histogram with a new bin count."""
-        if self.figure is None:
-            return
-        
-        self.ax.clear()
-        self.create_histogram(size_data, frequency_data, new_bin_count, 
-                            show_stats_lines=show_stats_lines)
+        # Don't reuse the old figure - create a new one instead
+        # This method is now deprecated in favor of creating new figures
+        logger.warning("update_bin_count is deprecated - use create_histogram instead")
+        return self.create_histogram(size_data, frequency_data, new_bin_count, 
+                                   show_stats_lines=show_stats_lines)
     
     def save_plot(self, filename: str, dpi: int = 300):
         """Save the current plot to file."""
