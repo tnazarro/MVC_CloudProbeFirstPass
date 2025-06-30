@@ -29,16 +29,17 @@ class ParticlePlotter:
     
     def create_histogram(self, size_data: np.ndarray, frequency_data: Optional[np.ndarray] = None, 
                         bin_count: int = DEFAULT_BIN_COUNT, title: str = "Particle Size Distribution", 
-                        show_stats_lines: bool = True) -> matplotlib.figure.Figure:
+                        show_stats_lines: bool = True, data_mode: str = "pre_aggregated") -> matplotlib.figure.Figure:
         """
         Create a histogram plot of particle size data.
         
         Args:
             size_data: Array of particle sizes
-            frequency_data: Optional array of frequencies (if None, uses count histogram)
+            frequency_data: Optional array of frequencies (ignored for raw measurements)
             bin_count: Number of bins for the histogram
             title: Plot title
             show_stats_lines: Whether to show mean and std deviation lines
+            data_mode: "pre_aggregated" or "raw_measurements"
             
         Returns:
             matplotlib Figure object
@@ -53,29 +54,44 @@ class ParticlePlotter:
             self.figure = plt.figure(figsize=(PLOT_WIDTH, PLOT_HEIGHT), dpi=PLOT_DPI)
             self.ax = self.figure.add_subplot(111)
             
-            if frequency_data is not None:
-                # Weighted histogram using frequency data
-                self.ax.hist(size_data, bins=bin_count, weights=frequency_data, 
-                           alpha=0.7, edgecolor='black', linewidth=0.5)
-                self.ax.set_ylabel('Frequency')
-            else:
-                # Simple count histogram
+            # Create histogram based on data mode
+            if data_mode == "raw_measurements":
+                # Raw measurements: create histogram from individual data points
                 self.ax.hist(size_data, bins=bin_count, alpha=0.7, 
                            edgecolor='black', linewidth=0.5)
                 self.ax.set_ylabel('Count')
+                logger.info(f"Created raw measurements histogram from {len(size_data)} individual measurements")
+                
+            elif data_mode == "pre_aggregated" and frequency_data is not None:
+                # Pre-aggregated with frequency data: weighted histogram
+                self.ax.hist(size_data, bins=bin_count, weights=frequency_data, 
+                           alpha=0.7, edgecolor='black', linewidth=0.5)
+                self.ax.set_ylabel('Frequency')
+                logger.info(f"Created pre-aggregated histogram with {len(size_data)} bins and frequency weights")
+                
+            else:
+                # Fallback: simple count histogram (shouldn't happen in normal operation)
+                self.ax.hist(size_data, bins=bin_count, alpha=0.7, 
+                           edgecolor='black', linewidth=0.5)
+                self.ax.set_ylabel('Count')
+                logger.info(f"Created fallback count histogram from {len(size_data)} data points")
             
             self.ax.set_xlabel('Particle Size')
             self.ax.set_title(title)
             self.ax.grid(True, alpha=0.3)
             
             # Calculate statistics for vertical lines
-            if frequency_data is not None:
-                # Weighted statistics
+            if data_mode == "raw_measurements":
+                # For raw measurements, use simple statistics
+                mean_size = np.mean(size_data)
+                std_size = np.std(size_data)
+            elif data_mode == "pre_aggregated" and frequency_data is not None:
+                # For pre-aggregated data, use weighted statistics
                 mean_size = np.average(size_data, weights=frequency_data)
                 variance = np.average((size_data - mean_size)**2, weights=frequency_data)
                 std_size = np.sqrt(variance)
             else:
-                # Simple statistics
+                # Fallback to simple statistics
                 mean_size = np.mean(size_data)
                 std_size = np.std(size_data)
             
@@ -84,7 +100,7 @@ class ParticlePlotter:
                 self._add_statistical_lines(mean_size, std_size)
             
             # Add some basic statistics to the plot
-            self._add_stats_text(size_data, frequency_data)
+            self._add_stats_text(size_data, frequency_data, data_mode)
             
             self.figure.tight_layout()
             logger.info(f"Created histogram with {bin_count} bins")
@@ -95,21 +111,29 @@ class ParticlePlotter:
             logger.error(f"Error creating histogram: {e}")
             return None
     
-    def _add_stats_text(self, size_data: np.ndarray, frequency_data: Optional[np.ndarray]):
+    def _add_stats_text(self, size_data: np.ndarray, frequency_data: Optional[np.ndarray], data_mode: str = "pre_aggregated"):
         """Add statistics text box to the plot."""
         try:
-            if frequency_data is not None:
-                # Calculate weighted statistics
-                weights = frequency_data / np.sum(frequency_data)
-                mean_size = np.average(size_data, weights=frequency_data)
-                # For weighted std, we need a more complex calculation
-                variance = np.average((size_data - mean_size)**2, weights=frequency_data)
-                std_size = np.sqrt(variance)
-            else:
+            if data_mode == "raw_measurements":
+                # Raw measurements statistics
                 mean_size = np.mean(size_data)
                 std_size = np.std(size_data)
-            
-            stats_text = f'Mean: {mean_size:.2f}\nStd: {std_size:.2f}\nN: {len(size_data)}'
+                n_measurements = len(size_data)
+                stats_text = f'Mean: {mean_size:.2f}\nStd: {std_size:.2f}\nMeasurements: {n_measurements}'
+                
+            elif data_mode == "pre_aggregated" and frequency_data is not None:
+                # Pre-aggregated weighted statistics
+                mean_size = np.average(size_data, weights=frequency_data)
+                variance = np.average((size_data - mean_size)**2, weights=frequency_data)
+                std_size = np.sqrt(variance)
+                total_frequency = np.sum(frequency_data)
+                stats_text = f'Mean: {mean_size:.2f}\nStd: {std_size:.2f}\nTotal: {total_frequency:.0f}'
+                
+            else:
+                # Fallback statistics
+                mean_size = np.mean(size_data)
+                std_size = np.std(size_data)
+                stats_text = f'Mean: {mean_size:.2f}\nStd: {std_size:.2f}\nN: {len(size_data)}'
             
             # Add text box
             self.ax.text(0.02, 0.98, stats_text, transform=self.ax.transAxes, 
