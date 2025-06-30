@@ -1,6 +1,5 @@
 """
-DEBUG VERSION - Main GUI window for the Particle Data Analyzer.
-This version includes extensive logging to diagnose plot overlay issues.
+Main GUI window for the Particle Data Analyzer.
 """
 
 import tkinter as tk
@@ -16,11 +15,11 @@ from config.constants import SUPPORTED_FILE_TYPES, MIN_BIN_COUNT, MAX_BIN_COUNT,
 logger = logging.getLogger(__name__)
 
 class MainWindow:
-    """Main application window with debug logging."""
+    """Main application window."""
     
     def __init__(self, root):
         self.root = root
-        self.root.title("Particle Data Analyzer - DEBUG VERSION")
+        self.root.title("Particle Data Analyzer")
         self.root.geometry("1200x800")
         
         # Set up proper close handling
@@ -37,21 +36,19 @@ class MainWindow:
         self.random_count_var = tk.IntVar(value=RANDOM_DATA_BOUNDS['default_n'])
         self.distribution_var = tk.StringVar(value='lognormal')
         self.show_stats_lines_var = tk.BooleanVar(value=True)
+        self.data_mode_var = tk.StringVar(value='pre_aggregated')
         
-        # Debug tracking
-        self.plot_counter = 0
-        self.update_counter = 0
-        self.current_figure = None  # Track our current figure separately
+        # Track current figure for proper cleanup
+        self.current_figure = None
         
         self._create_widgets()
         self._create_layout()
         
-        logger.info("MainWindow initialized successfully")
+        # Initialize UI state
+        self._update_data_mode_ui()
     
     def _create_widgets(self):
         """Create all GUI widgets."""
-        logger.info("Creating GUI widgets...")
-        
         # Main frame
         self.main_frame = ttk.Frame(self.root)
         
@@ -87,21 +84,40 @@ class MainWindow:
         
         ttk.Separator(self.control_frame, orient='horizontal').grid(row=4, column=0, columnspan=3, sticky='ew', pady=5)
         
-        # Column selection
-        ttk.Label(self.control_frame, text="Size Column:").grid(row=5, column=0, sticky='w', pady=2)
-        self.size_combo = ttk.Combobox(self.control_frame, textvariable=self.size_column_var, state='readonly')
-        self.size_combo.grid(row=5, column=1, sticky='ew', pady=2)
+        # Data mode selection
+        ttk.Label(self.control_frame, text="Data Type:").grid(row=5, column=0, sticky='w', pady=2)
         
-        ttk.Label(self.control_frame, text="Frequency Column:").grid(row=6, column=0, sticky='w', pady=2)
+        data_mode_frame = ttk.Frame(self.control_frame)
+        data_mode_frame.grid(row=5, column=1, columnspan=2, sticky='ew', pady=2)
+        
+        self.pre_agg_radio = ttk.Radiobutton(data_mode_frame, text="Pre-aggregated (Size + Frequency)", 
+                                           variable=self.data_mode_var, value='pre_aggregated',
+                                           command=self._on_data_mode_change)
+        self.pre_agg_radio.grid(row=0, column=0, sticky='w')
+        
+        self.raw_radio = ttk.Radiobutton(data_mode_frame, text="Raw Measurements (Size only)", 
+                                       variable=self.data_mode_var, value='raw_measurements',
+                                       command=self._on_data_mode_change)
+        self.raw_radio.grid(row=1, column=0, sticky='w')
+        
+        ttk.Separator(self.control_frame, orient='horizontal').grid(row=6, column=0, columnspan=3, sticky='ew', pady=5)
+        
+        # Column selection
+        ttk.Label(self.control_frame, text="Size Column:").grid(row=7, column=0, sticky='w', pady=2)
+        self.size_combo = ttk.Combobox(self.control_frame, textvariable=self.size_column_var, state='readonly')
+        self.size_combo.grid(row=7, column=1, sticky='ew', pady=2)
+        
+        self.frequency_label = ttk.Label(self.control_frame, text="Frequency Column:")
+        self.frequency_label.grid(row=8, column=0, sticky='w', pady=2)
         self.frequency_combo = ttk.Combobox(self.control_frame, textvariable=self.frequency_column_var, state='readonly')
-        self.frequency_combo.grid(row=6, column=1, sticky='ew', pady=2)
+        self.frequency_combo.grid(row=8, column=1, sticky='ew', pady=2)
         
         # Bin count control
-        ttk.Label(self.control_frame, text="Bins:").grid(row=7, column=0, sticky='w', pady=2)
+        ttk.Label(self.control_frame, text="Bins:").grid(row=9, column=0, sticky='w', pady=2)
         
         # Create frame for bin controls
         bin_frame = ttk.Frame(self.control_frame)
-        bin_frame.grid(row=7, column=1, columnspan=2, sticky='ew', pady=2)
+        bin_frame.grid(row=9, column=1, columnspan=2, sticky='ew', pady=2)
         
         # Bin count slider
         self.bin_scale = ttk.Scale(bin_frame, from_=MIN_BIN_COUNT, to=MAX_BIN_COUNT, 
@@ -128,23 +144,18 @@ class MainWindow:
                                                 text="Show Mean & Std Dev Lines", 
                                                 variable=self.show_stats_lines_var,
                                                 command=self._on_stats_toggle)
-        self.stats_lines_check.grid(row=8, column=0, columnspan=2, sticky='w', pady=2)
+        self.stats_lines_check.grid(row=10, column=0, columnspan=2, sticky='w', pady=2)
         
         # Plot button
         self.plot_button = ttk.Button(self.control_frame, text="Create Plot", 
                                      command=self.create_plot, state='disabled')
-        self.plot_button.grid(row=9, column=0, columnspan=2, sticky='ew', pady=10)
-        
-        # DEBUG: Add manual cleanup button
-        self.debug_cleanup_button = ttk.Button(self.control_frame, text="DEBUG: Force Cleanup", 
-                                              command=self._debug_force_cleanup)
-        self.debug_cleanup_button.grid(row=10, column=0, columnspan=2, sticky='ew', pady=5)
+        self.plot_button.grid(row=11, column=0, columnspan=2, sticky='ew', pady=10)
         
         # Stats display
         self.stats_frame = ttk.LabelFrame(self.control_frame, text="Data Info", padding=5)
-        self.stats_frame.grid(row=11, column=0, columnspan=3, sticky='ew', pady=5)
+        self.stats_frame.grid(row=12, column=0, columnspan=3, sticky='ew', pady=5)
         
-        self.stats_text = tk.Text(self.stats_frame, height=6, width=30)
+        self.stats_text = tk.Text(self.stats_frame, height=8, width=30)
         self.stats_text.pack(fill='both', expand=True)
         
         # Plot frame (right side)
@@ -152,12 +163,9 @@ class MainWindow:
         
         # Configure column weights
         self.control_frame.columnconfigure(1, weight=1)
-        
-        logger.info("GUI widgets created successfully")
     
     def _create_layout(self):
         """Arrange widgets in the window."""
-        logger.info("Creating layout...")
         self.main_frame.pack(fill='both', expand=True, padx=5, pady=5)
         
         # Use grid for main layout
@@ -166,18 +174,15 @@ class MainWindow:
         
         self.control_frame.grid(row=0, column=0, sticky='nsew', padx=(0, 5))
         self.plot_frame.grid(row=0, column=1, sticky='nsew')
-        logger.info("Layout created successfully")
     
     def load_file(self):
         """Load a CSV file."""
-        logger.info("Load file button clicked")
         file_path = filedialog.askopenfilename(
             title="Select CSV file",
             filetypes=SUPPORTED_FILE_TYPES
         )
         
         if file_path:
-            logger.info(f"Selected file: {file_path}")
             if self.data_processor.load_csv(file_path):
                 self._update_column_combos()
                 self._update_stats_display()
@@ -188,18 +193,20 @@ class MainWindow:
     
     def generate_random_data(self):
         """Generate random particle data for testing."""
-        logger.info("Generate random data button clicked")
         try:
             n = self.random_count_var.get()
             distribution = self.distribution_var.get()
-            
-            logger.info(f"Generating {n} points with {distribution} distribution")
             
             if n <= 0:
                 messagebox.showerror("Error", "Number of points must be positive.")
                 return
             
             if self.data_processor.generate_random_data(n, distribution):
+                # Set data mode to match generated data (always pre-aggregated for random data)
+                self.data_processor.set_data_mode('pre_aggregated')
+                self.data_mode_var.set('pre_aggregated')
+                self._update_data_mode_ui()
+                
                 self._update_column_combos()
                 self._update_stats_display()
                 self.plot_button.config(state='normal')
@@ -210,9 +217,40 @@ class MainWindow:
         except tk.TclError:
             messagebox.showerror("Error", "Please enter a valid number of points.")
     
+    def _on_data_mode_change(self):
+        """Handle data mode change (pre-aggregated vs raw measurements)."""
+        mode = self.data_mode_var.get()
+        
+        # Update data processor
+        self.data_processor.set_data_mode(mode)
+        
+        # Update UI
+        self._update_data_mode_ui()
+        
+        # Update stats display
+        self._update_stats_display()
+        
+        # If we have a current plot, update it
+        if hasattr(self, 'canvas') and self.data_processor.data is not None:
+            self._update_plot()
+    
+    def _update_data_mode_ui(self):
+        """Update UI elements based on current data mode."""
+        mode = self.data_mode_var.get()
+        
+        if mode == 'raw_measurements':
+            # Hide frequency column selector for raw measurements
+            self.frequency_label.grid_remove()
+            self.frequency_combo.grid_remove()
+            # Clear frequency column selection
+            self.frequency_column_var.set('')
+        else:
+            # Show frequency column selector for pre-aggregated data
+            self.frequency_label.grid()
+            self.frequency_combo.grid()
+    
     def _update_column_combos(self):
         """Update the column selection comboboxes."""
-        logger.info("Updating column combos")
         columns = self.data_processor.get_columns()
         
         self.size_combo['values'] = columns
@@ -226,19 +264,31 @@ class MainWindow:
     
     def _update_stats_display(self):
         """Update the statistics display."""
-        logger.info("Updating stats display")
         stats = self.data_processor.get_data_stats()
         
         self.stats_text.delete(1.0, tk.END)
         
         stats_str = f"Rows: {stats.get('total_rows', 'N/A')}\n"
         stats_str += f"Columns: {stats.get('total_columns', 'N/A')}\n"
+        stats_str += f"Mode: {stats.get('data_mode', 'N/A')}\n"
         
         if 'size_min' in stats:
             stats_str += f"\nSize Range:\n"
             stats_str += f"  Min: {stats['size_min']:.3f}\n"
             stats_str += f"  Max: {stats['size_max']:.3f}\n"
             stats_str += f"  Mean: {stats['size_mean']:.3f}\n"
+            
+            # Add mode-specific stats
+            if stats.get('data_mode') == 'raw_measurements':
+                if 'unique_measurements' in stats:
+                    stats_str += f"\nMeasurements:\n"
+                    stats_str += f"  Total: {stats['total_measurements']}\n"
+                    stats_str += f"  Unique: {stats['unique_measurements']}\n"
+            elif stats.get('data_mode') == 'pre_aggregated':
+                if 'total_frequency' in stats:
+                    stats_str += f"\nFrequency:\n"
+                    stats_str += f"  Total: {stats['total_frequency']:.0f}\n"
+                    stats_str += f"  Mean: {stats['frequency_mean']:.2f}\n"
         
         self.stats_text.insert(1.0, stats_str)
     
@@ -247,21 +297,12 @@ class MainWindow:
         # Convert float value to integer and update the IntVar
         bin_count = int(float(value))
         self.bin_count_var.set(bin_count)
-        logger.info(f"Bin count slider moved to: {bin_count} (no plot update)")
-    
-    def _on_bin_change(self, value):
-        """Handle bin count scale change - now only for display updates."""
-        # This method is now redundant but kept for compatibility
-        bin_count = int(float(value))
-        logger.info(f"Bin count changed to: {bin_count} (no plot update)")
     
     def _on_bin_scale_release(self, event):
         """Handle bin count scale release - triggers plot update."""
         # Ensure we have an integer value
         bin_count = int(self.bin_count_var.get())
         self.bin_count_var.set(bin_count)  # Force integer update
-        
-        logger.info(f"Bin count slider released at: {bin_count}")
         
         # Validate and constrain the value
         if bin_count < MIN_BIN_COUNT:
@@ -273,55 +314,51 @@ class MainWindow:
         
         # Update plot if we have data
         if hasattr(self, 'canvas') and self.data_processor.data is not None:
-            logger.info("Calling _update_plot from bin scale release")
             self._update_plot()
     
     def _on_bin_entry_change(self, event):
         """Handle bin count entry field changes."""
         try:
             bin_count = int(self.bin_count_var.get())
-            logger.info(f"Bin count entry changed to: {bin_count}")
             
             # Validate and constrain the value
             if bin_count < MIN_BIN_COUNT:
                 bin_count = MIN_BIN_COUNT
                 self.bin_count_var.set(bin_count)
-                logger.info(f"Bin count constrained to minimum: {bin_count}")
             elif bin_count > MAX_BIN_COUNT:
                 bin_count = MAX_BIN_COUNT
                 self.bin_count_var.set(bin_count)
-                logger.info(f"Bin count constrained to maximum: {bin_count}")
             
             # Update plot if we have data
             if hasattr(self, 'canvas') and self.data_processor.data is not None:
-                logger.info("Calling _update_plot from bin entry change")
                 self._update_plot()
                 
         except (ValueError, tk.TclError):
             # Invalid entry - reset to current slider value or default
-            logger.warning("Invalid bin count entry - resetting")
             self.bin_count_var.set(DEFAULT_BIN_COUNT)
     
     def _on_stats_toggle(self):
         """Handle statistical lines toggle change."""
-        show_stats = self.show_stats_lines_var.get()
-        logger.info(f"Stats lines toggled to: {show_stats}")
-        
         # If we have a current plot, update it
         if hasattr(self, 'canvas') and self.data_processor.data is not None:
-            logger.info("Calling _update_plot from stats toggle")
             self._update_plot()
     
     def create_plot(self):
         """Create and display the histogram plot."""
-        self.plot_counter += 1
-        logger.info(f"=== CREATE PLOT #{self.plot_counter} ===")
+        # Update data processor with current settings
+        mode = self.data_mode_var.get()
+        self.data_processor.set_data_mode(mode)
         
         # Update column selections
-        self.data_processor.set_columns(
-            self.size_column_var.get(),
-            self.frequency_column_var.get()
-        )
+        if mode == 'pre_aggregated':
+            self.data_processor.set_columns(
+                self.size_column_var.get(),
+                self.frequency_column_var.get()
+            )
+        else:  # raw_measurements
+            self.data_processor.set_columns(
+                self.size_column_var.get()
+            )
         
         size_data = self.data_processor.get_size_data()
         frequency_data = self.data_processor.get_frequency_data()
@@ -330,86 +367,55 @@ class MainWindow:
             messagebox.showerror("Error", "Please select a valid size column.")
             return
         
-        logger.info(f"Creating plot with {len(size_data)} data points")
-        logger.info(f"Current matplotlib figures: {len(plt.get_fignums())}")
-        
         # Create the plot
         figure = self.plotter.create_histogram(
             size_data, frequency_data, self.bin_count_var.get(),
-            show_stats_lines=self.show_stats_lines_var.get()
+            show_stats_lines=self.show_stats_lines_var.get(),
+            data_mode=mode
         )
         
         if figure is not None:
-            logger.info(f"Plot created successfully. Figure ID: {figure.number}")
-            logger.info(f"Matplotlib figures after creation: {len(plt.get_fignums())}")
             self.current_figure = figure  # Store reference to current figure
             self._display_plot(figure)
         else:
-            logger.error("Failed to create plot")
+            messagebox.showerror("Error", "Failed to create plot.")
     
     def _update_plot(self):
         """Update the existing plot with new bin count or settings."""
-        self.update_counter += 1
-        logger.info(f"=== UPDATE PLOT #{self.update_counter} ===")
-        
         if not hasattr(self, 'canvas'):
-            logger.warning("No canvas found for update")
             return
-        
-        logger.info(f"Canvas exists: {hasattr(self, 'canvas')}")
-        logger.info(f"Current matplotlib figures before update: {len(plt.get_fignums())}")
-        logger.info(f"Figure numbers: {plt.get_fignums()}")
         
         size_data = self.data_processor.get_size_data()
         frequency_data = self.data_processor.get_frequency_data()
         
         if size_data is not None:
-            logger.info(f"Updating plot with {len(size_data)} data points")
-            
             # For updates, just recreate the entire plot display
             # This is more reliable than trying to swap figures
+            mode = self.data_mode_var.get()
+            
             figure = self.plotter.create_histogram(
                 size_data, frequency_data, self.bin_count_var.get(),
-                show_stats_lines=self.show_stats_lines_var.get()
+                show_stats_lines=self.show_stats_lines_var.get(),
+                data_mode=mode
             )
             
             if figure is not None:
-                logger.info(f"New figure created for update. Figure ID: {figure.number}")
-                logger.info(f"Using full display recreation for reliability")
                 self._display_plot(figure)
-            else:
-                logger.error("Failed to create updated plot")
-        else:
-            logger.warning("No size data available for update")
     
     def _display_plot(self, figure):
         """Display the plot in the GUI."""
-        logger.info(f"=== DISPLAY PLOT ===")
-        logger.info(f"Plot frame children before clear: {len(self.plot_frame.winfo_children())}")
-        
         # Clear existing plot widgets completely
-        for i, widget in enumerate(self.plot_frame.winfo_children()):
-            logger.info(f"Destroying widget {i}: {type(widget)}")
+        for widget in self.plot_frame.winfo_children():
             widget.destroy()
-        
-        logger.info(f"Plot frame children after clear: {len(self.plot_frame.winfo_children())}")
         
         # Clear any existing matplotlib figures
         if hasattr(self, 'canvas'):
-            logger.info("Cleaning up existing canvas")
             if self.current_figure and self.current_figure != figure:
                 # Only close if it's a different figure than the one we're displaying
-                old_fig_id = self.current_figure.number
-                logger.info(f"Closing old figure ID: {old_fig_id}")
                 plt.close(self.current_figure)
-            else:
-                logger.info("Skipping figure close - same as new figure or no current figure")
             del self.canvas
         
-        logger.info(f"Matplotlib figures after cleanup: {len(plt.get_fignums())}")
-        
         # Create new canvas with the figure
-        logger.info(f"Creating new canvas with figure ID: {figure.number}")
         self.canvas = FigureCanvasTkAgg(figure, self.plot_frame)
         self.current_figure = figure  # Update our reference
         self.canvas.draw()
@@ -417,78 +423,13 @@ class MainWindow:
         # Pack the canvas widget
         canvas_widget = self.canvas.get_tk_widget()
         canvas_widget.pack(fill='both', expand=True)
-        logger.info("Canvas widget packed")
         
         # Add toolbar
         toolbar = NavigationToolbar2Tk(self.canvas, self.plot_frame)
         toolbar.update()
-        logger.info("Toolbar added")
-        
-        logger.info(f"Final matplotlib figures: {len(plt.get_fignums())}")
-        logger.info(f"Plot frame children after display: {len(self.plot_frame.winfo_children())}")
-    
-    def _replace_plot_figure(self, new_figure, old_figure=None):
-        """Replace the current plot figure without recreating widgets."""
-        logger.info(f"=== REPLACE PLOT FIGURE ===")
-        logger.info(f"Replacing with figure ID: {new_figure.number}")
-        
-        try:
-            # Close the old figure properly using our stored reference
-            if old_figure:
-                old_fig_id = old_figure.number
-                logger.info(f"Closing old figure ID: {old_fig_id}")
-                plt.close(old_figure)
-            elif hasattr(self.canvas, 'figure') and self.canvas.figure:
-                # Fallback to canvas figure if no stored reference
-                old_fig_id = self.canvas.figure.number
-                logger.info(f"Closing canvas figure ID: {old_fig_id}")
-                plt.close(self.canvas.figure)
-            
-            logger.info(f"Matplotlib figures after closing old: {len(plt.get_fignums())}")
-            
-            # Update the canvas with the new figure
-            logger.info("Setting new figure on canvas")
-            self.canvas.figure = new_figure
-            self.canvas.draw()
-            
-            # Force a GUI update to ensure proper rendering
-            self.canvas.get_tk_widget().update()
-            logger.info("Canvas updated and redrawn")
-            
-            logger.info(f"Final matplotlib figures: {len(plt.get_fignums())}")
-            
-        except Exception as e:
-            logger.error(f"Error replacing plot figure: {e}")
-            # If replacement fails, fall back to full plot recreation
-            logger.info("Falling back to full plot recreation")
-            self._display_plot(new_figure)
-    
-    def _debug_force_cleanup(self):
-        """DEBUG: Force cleanup of all matplotlib figures."""
-        logger.info("=== FORCE CLEANUP DEBUG ===")
-        logger.info(f"Matplotlib figures before cleanup: {len(plt.get_fignums())}")
-        logger.info(f"Figure numbers: {plt.get_fignums()}")
-        
-        # Close all matplotlib figures
-        plt.close('all')
-        
-        # Clear plot frame
-        for widget in self.plot_frame.winfo_children():
-            widget.destroy()
-        
-        # Reset canvas
-        if hasattr(self, 'canvas'):
-            del self.canvas
-        
-        if hasattr(self, 'current_figure'):
-            self.current_figure = None
-        
-        logger.info(f"Matplotlib figures after cleanup: {len(plt.get_fignums())}")
-        messagebox.showinfo("Debug", "Forced cleanup completed - check console for details")
     
     def _on_closing(self):
         """Handle application closing cleanly."""
-        logger.info("=== APPLICATION CLOSING ===")
         try:
             # Close matplotlib figures properly
             if hasattr(self, 'canvas'):
