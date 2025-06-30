@@ -512,3 +512,5 @@ class MainWindow:
             # Force exit if cleanup fails
             import sys
             sys.exit(0)
+
+#Test addition, checking to see if I'm on the right branch
