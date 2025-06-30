@@ -1,4 +1,3 @@
-# core/data_processor.py
 """
 Data processing module for particle sizing data.
 """
@@ -18,6 +17,7 @@ class ParticleDataProcessor:
         self.data = None
         self.size_column = None
         self.frequency_column = None
+        self.data_mode = "pre_aggregated"  # "pre_aggregated" or "raw_measurements"
     
     def load_csv(self, file_path: str) -> bool:
         """
@@ -69,15 +69,46 @@ class ParticleDataProcessor:
             return []
         return self.data.columns.tolist()
     
-    def set_columns(self, size_col: str, frequency_col: str):
-        """Manually set the size and frequency columns."""
+    def set_data_mode(self, mode: str):
+        """
+        Set the data processing mode.
+        
+        Args:
+            mode: Either "pre_aggregated" or "raw_measurements"
+        """
+        if mode in ["pre_aggregated", "raw_measurements"]:
+            self.data_mode = mode
+            logger.info(f"Data mode set to: {mode}")
+            
+            # Reset frequency column if switching to raw measurements
+            if mode == "raw_measurements":
+                self.frequency_column = None
+        else:
+            logger.warning(f"Invalid data mode: {mode}")
+    
+    def get_data_mode(self) -> str:
+        """Get the current data processing mode."""
+        return self.data_mode
+    
+    def set_columns(self, size_col: str, frequency_col: str = None):
+        """
+        Manually set the size and frequency columns.
+        
+        Args:
+            size_col: Name of the size column
+            frequency_col: Name of the frequency column (optional for raw measurements)
+        """
         if self.data is None:
             return
         
         if size_col in self.data.columns:
             self.size_column = size_col
-        if frequency_col in self.data.columns:
+            
+        # Only set frequency column in pre-aggregated mode
+        if self.data_mode == "pre_aggregated" and frequency_col and frequency_col in self.data.columns:
             self.frequency_column = frequency_col
+        elif self.data_mode == "raw_measurements":
+            self.frequency_column = None
     
     def get_size_data(self) -> Optional[np.ndarray]:
         """Get the size data as numpy array."""
@@ -92,6 +123,10 @@ class ParticleDataProcessor:
     
     def get_frequency_data(self) -> Optional[np.ndarray]:
         """Get the frequency data as numpy array."""
+        # Return None for raw measurements mode (frequencies will be calculated during plotting)
+        if self.data_mode == "raw_measurements":
+            return None
+            
         if self.data is None or self.frequency_column is None:
             return None
         
@@ -108,7 +143,8 @@ class ParticleDataProcessor:
         
         stats = {
             'total_rows': len(self.data),
-            'total_columns': len(self.data.columns)
+            'total_columns': len(self.data.columns),
+            'data_mode': self.data_mode
         }
         
         if self.size_column:
@@ -117,6 +153,17 @@ class ParticleDataProcessor:
                 stats['size_min'] = np.min(size_data)
                 stats['size_max'] = np.max(size_data)
                 stats['size_mean'] = np.mean(size_data)
+                
+                # Add mode-specific stats
+                if self.data_mode == "raw_measurements":
+                    stats['unique_measurements'] = len(np.unique(size_data))
+                    stats['total_measurements'] = len(size_data)
+                elif self.data_mode == "pre_aggregated":
+                    if self.frequency_column:
+                        freq_data = self.get_frequency_data()
+                        if freq_data is not None:
+                            stats['total_frequency'] = np.sum(freq_data)
+                            stats['frequency_mean'] = np.mean(freq_data)
         
         return stats
     
@@ -198,4 +245,3 @@ class ParticleDataProcessor:
         # Scale to 0-1 first, then to desired range
         normalized = (data - data_min) / (data_max - data_min)
         return normalized * (max_val - min_val) + min_val
-    
