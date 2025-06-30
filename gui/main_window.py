@@ -512,3 +512,5 @@ class MainWindow:
             # Force exit if cleanup fails
             import sys
             sys.exit(0)
+
+#Second test; viewing testingHistogram branch change
