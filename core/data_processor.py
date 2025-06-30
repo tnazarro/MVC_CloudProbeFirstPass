@@ -17,7 +17,7 @@ class ParticleDataProcessor:
         self.data = None
         self.size_column = None
         self.frequency_column = None
-        self.data_mode = "raw_measurements"  # "pre_aggregated" or "raw_measurements"
+        self.data_mode = "pre_aggregated"  # "pre_aggregated" or "raw_measurements"
     
     def load_csv(self, file_path: str, skip_rows: int = 0) -> bool:
         """
@@ -30,23 +30,34 @@ class ParticleDataProcessor:
         Returns:
             bool: True if successfully loaded, False otherwise
         """
-        try:
-            # Load CSV with row skipping
-            if skip_rows > 0:
-                self.data = pd.read_csv(file_path, skiprows=skip_rows)
-                logger.info(f"Loaded CSV with {skip_rows} rows skipped - {len(self.data)} rows and {len(self.data.columns)} columns remaining")
-            else:
-                self.data = pd.read_csv(file_path)
-                logger.info(f"Loaded CSV with {len(self.data)} rows and {len(self.data.columns)} columns")
-            
-            # Auto-detect columns
-            self._detect_columns()
-            
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to load CSV: {e}")
-            return False
+        # Try different encodings in order of likelihood
+        encodings_to_try = ['utf-8', 'windows-1252', 'iso-8859-1', 'cp1252', 'latin1']
+        
+        for encoding in encodings_to_try:
+            try:
+                # Load CSV with row skipping and encoding
+                if skip_rows > 0:
+                    self.data = pd.read_csv(file_path, skiprows=skip_rows, encoding=encoding)
+                    logger.info(f"Loaded CSV with {skip_rows} rows skipped - {len(self.data)} rows and {len(self.data.columns)} columns remaining (encoding: {encoding})")
+                else:
+                    self.data = pd.read_csv(file_path, encoding=encoding)
+                    logger.info(f"Loaded CSV with {len(self.data)} rows and {len(self.data.columns)} columns (encoding: {encoding})")
+                
+                # Auto-detect columns
+                self._detect_columns()
+                
+                return True
+                
+            except UnicodeDecodeError:
+                # Try next encoding
+                continue
+            except Exception as e:
+                logger.error(f"Failed to load CSV with encoding {encoding}: {e}")
+                continue
+        
+        # If all encodings failed
+        logger.error(f"Failed to load CSV with any supported encoding. Tried: {', '.join(encodings_to_try)}")
+        return False
     
     def _detect_columns(self):
         """Attempt to automatically detect size and frequency columns."""
@@ -184,38 +195,49 @@ class ParticleDataProcessor:
         Returns:
             dict: Contains preview data, total rows, and columns info
         """
-        try:
-            # Read just the preview rows without parsing
-            with open(file_path, 'r', encoding='utf-8') as f:
-                preview_lines = [f.readline().strip() for _ in range(preview_rows)]
-            
-            # Also get total line count
-            with open(file_path, 'r', encoding='utf-8') as f:
-                total_lines = sum(1 for _ in f)
-            
-            # Try to parse the file normally to get column info
+        # Try different encodings in order of likelihood
+        encodings_to_try = ['utf-8', 'windows-1252', 'iso-8859-1', 'cp1252', 'latin1']
+        
+        for encoding in encodings_to_try:
             try:
-                sample_df = pd.read_csv(file_path, nrows=5)
-                columns = sample_df.columns.tolist()
-                detected_columns = len(columns)
-            except:
-                columns = []
-                detected_columns = 0
-            
-            return {
-                'success': True,
-                'preview_lines': preview_lines,
-                'total_lines': total_lines,
-                'detected_columns': detected_columns,
-                'column_names': columns
-            }
-            
-        except Exception as e:
-            logger.error(f"Failed to preview CSV: {e}")
-            return {
-                'success': False,
-                'error': str(e)
-            }
+                # Read just the preview rows
+                with open(file_path, 'r', encoding=encoding) as f:
+                    preview_lines = [f.readline().strip() for _ in range(preview_rows)]
+                
+                # Get total line count with same encoding
+                with open(file_path, 'r', encoding=encoding) as f:
+                    total_lines = sum(1 for _ in f)
+                
+                # Try to parse the file normally to get column info
+                try:
+                    sample_df = pd.read_csv(file_path, nrows=5, encoding=encoding)
+                    columns = sample_df.columns.tolist()
+                    detected_columns = len(columns)
+                except:
+                    columns = []
+                    detected_columns = 0
+                
+                return {
+                    'success': True,
+                    'preview_lines': preview_lines,
+                    'total_lines': total_lines,
+                    'detected_columns': detected_columns,
+                    'column_names': columns,
+                    'encoding_used': encoding
+                }
+                
+            except UnicodeDecodeError:
+                # Try next encoding
+                continue
+            except Exception as e:
+                logger.error(f"Failed to preview CSV with encoding {encoding}: {e}")
+                continue
+        
+        # If all encodings failed
+        return {
+            'success': False,
+            'error': f"Could not read file with any supported encoding. Tried: {', '.join(encodings_to_try)}"
+        }
     
     def generate_random_data(self, n: int = None, distribution: str = 'lognormal') -> bool:
         """
