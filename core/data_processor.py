@@ -198,3 +198,4 @@ class ParticleDataProcessor:
         # Scale to 0-1 first, then to desired range
         normalized = (data - data_min) / (data_max - data_min)
         return normalized * (max_val - min_val) + min_val
+    
