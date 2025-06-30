@@ -19,19 +19,25 @@ class ParticleDataProcessor:
         self.frequency_column = None
         self.data_mode = "pre_aggregated"  # "pre_aggregated" or "raw_measurements"
     
-    def load_csv(self, file_path: str) -> bool:
+    def load_csv(self, file_path: str, skip_rows: int = 0) -> bool:
         """
         Load CSV file and attempt to identify size and frequency columns.
         
         Args:
             file_path: Path to the CSV file
+            skip_rows: Number of rows to skip from the beginning of the file
             
         Returns:
             bool: True if successfully loaded, False otherwise
         """
         try:
-            self.data = pd.read_csv(file_path)
-            logger.info(f"Loaded CSV with {len(self.data)} rows and {len(self.data.columns)} columns")
+            # Load CSV with row skipping
+            if skip_rows > 0:
+                self.data = pd.read_csv(file_path, skiprows=skip_rows)
+                logger.info(f"Loaded CSV with {skip_rows} rows skipped - {len(self.data)} rows and {len(self.data.columns)} columns remaining")
+            else:
+                self.data = pd.read_csv(file_path)
+                logger.info(f"Loaded CSV with {len(self.data)} rows and {len(self.data.columns)} columns")
             
             # Auto-detect columns
             self._detect_columns()
@@ -166,6 +172,50 @@ class ParticleDataProcessor:
                             stats['frequency_mean'] = np.mean(freq_data)
         
         return stats
+    
+    def preview_csv(self, file_path: str, preview_rows: int = 10) -> dict:
+        """
+        Preview the first few rows of a CSV file to help identify junk data.
+        
+        Args:
+            file_path: Path to the CSV file
+            preview_rows: Number of rows to preview
+            
+        Returns:
+            dict: Contains preview data, total rows, and columns info
+        """
+        try:
+            # Read just the preview rows without parsing
+            with open(file_path, 'r', encoding='utf-8') as f:
+                preview_lines = [f.readline().strip() for _ in range(preview_rows)]
+            
+            # Also get total line count
+            with open(file_path, 'r', encoding='utf-8') as f:
+                total_lines = sum(1 for _ in f)
+            
+            # Try to parse the file normally to get column info
+            try:
+                sample_df = pd.read_csv(file_path, nrows=5)
+                columns = sample_df.columns.tolist()
+                detected_columns = len(columns)
+            except:
+                columns = []
+                detected_columns = 0
+            
+            return {
+                'success': True,
+                'preview_lines': preview_lines,
+                'total_lines': total_lines,
+                'detected_columns': detected_columns,
+                'column_names': columns
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to preview CSV: {e}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
     
     def generate_random_data(self, n: int = None, distribution: str = 'lognormal') -> bool:
         """

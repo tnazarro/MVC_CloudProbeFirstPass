@@ -37,6 +37,7 @@ class MainWindow:
         self.distribution_var = tk.StringVar(value='lognormal')
         self.show_stats_lines_var = tk.BooleanVar(value=True)
         self.data_mode_var = tk.StringVar(value='pre_aggregated')
+        self.skip_rows_var = tk.IntVar(value=0)
         
         # Track current figure for proper cleanup
         self.current_figure = None
@@ -55,19 +56,38 @@ class MainWindow:
         # Control frame (left side)
         self.control_frame = ttk.LabelFrame(self.main_frame, text="Controls", padding=10)
         
-        # File loading
+        # File loading with preview
         ttk.Label(self.control_frame, text="Data File:").grid(row=0, column=0, sticky='w', pady=2)
-        self.load_button = ttk.Button(self.control_frame, text="Load CSV", command=self.load_file)
-        self.load_button.grid(row=0, column=1, sticky='ew', pady=2)
+        
+        file_frame = ttk.Frame(self.control_frame)
+        file_frame.grid(row=0, column=1, columnspan=2, sticky='ew', pady=2)
+        
+        self.load_button = ttk.Button(file_frame, text="Load CSV", command=self.load_file)
+        self.load_button.grid(row=0, column=0, sticky='ew', padx=(0,5))
+        
+        self.preview_button = ttk.Button(file_frame, text="Preview", command=self.preview_file)
+        self.preview_button.grid(row=0, column=1)
+        
+        file_frame.columnconfigure(0, weight=1)
+        
+        # File filtering options
+        filter_frame = ttk.Frame(self.control_frame)
+        filter_frame.grid(row=1, column=0, columnspan=3, sticky='ew', pady=2)
+        
+        ttk.Label(filter_frame, text="Skip rows:").grid(row=0, column=0, sticky='w')
+        self.skip_rows_entry = ttk.Entry(filter_frame, textvariable=self.skip_rows_var, width=6)
+        self.skip_rows_entry.grid(row=0, column=1, padx=5)
+        
+        ttk.Label(filter_frame, text="(header rows, metadata, etc.)").grid(row=0, column=2, sticky='w', padx=(5,0))
         
         # Random data generation
-        ttk.Separator(self.control_frame, orient='horizontal').grid(row=1, column=0, columnspan=3, sticky='ew', pady=5)
+        ttk.Separator(self.control_frame, orient='horizontal').grid(row=2, column=0, columnspan=3, sticky='ew', pady=5)
         
-        ttk.Label(self.control_frame, text="Generate Random Data:").grid(row=2, column=0, sticky='w', pady=2)
+        ttk.Label(self.control_frame, text="Generate Random Data:").grid(row=3, column=0, sticky='w', pady=2)
         
         # Random data controls frame
         random_frame = ttk.Frame(self.control_frame)
-        random_frame.grid(row=3, column=0, columnspan=3, sticky='ew', pady=2)
+        random_frame.grid(row=4, column=0, columnspan=3, sticky='ew', pady=2)
         
         ttk.Label(random_frame, text="Points:").grid(row=0, column=0, sticky='w')
         self.random_count_entry = ttk.Entry(random_frame, textvariable=self.random_count_var, width=8)
@@ -82,13 +102,13 @@ class MainWindow:
         self.generate_button = ttk.Button(random_frame, text="Generate", command=self.generate_random_data)
         self.generate_button.grid(row=0, column=4, padx=5)
         
-        ttk.Separator(self.control_frame, orient='horizontal').grid(row=4, column=0, columnspan=3, sticky='ew', pady=5)
+        ttk.Separator(self.control_frame, orient='horizontal').grid(row=5, column=0, columnspan=3, sticky='ew', pady=5)
         
         # Data mode selection
-        ttk.Label(self.control_frame, text="Data Type:").grid(row=5, column=0, sticky='w', pady=2)
+        ttk.Label(self.control_frame, text="Data Type:").grid(row=6, column=0, sticky='w', pady=2)
         
         data_mode_frame = ttk.Frame(self.control_frame)
-        data_mode_frame.grid(row=5, column=1, columnspan=2, sticky='ew', pady=2)
+        data_mode_frame.grid(row=6, column=1, columnspan=2, sticky='ew', pady=2)
         
         self.pre_agg_radio = ttk.Radiobutton(data_mode_frame, text="Pre-aggregated (Size + Frequency)", 
                                            variable=self.data_mode_var, value='pre_aggregated',
@@ -100,24 +120,24 @@ class MainWindow:
                                        command=self._on_data_mode_change)
         self.raw_radio.grid(row=1, column=0, sticky='w')
         
-        ttk.Separator(self.control_frame, orient='horizontal').grid(row=6, column=0, columnspan=3, sticky='ew', pady=5)
+        ttk.Separator(self.control_frame, orient='horizontal').grid(row=7, column=0, columnspan=3, sticky='ew', pady=5)
         
         # Column selection
-        ttk.Label(self.control_frame, text="Size Column:").grid(row=7, column=0, sticky='w', pady=2)
+        ttk.Label(self.control_frame, text="Size Column:").grid(row=8, column=0, sticky='w', pady=2)
         self.size_combo = ttk.Combobox(self.control_frame, textvariable=self.size_column_var, state='readonly')
-        self.size_combo.grid(row=7, column=1, sticky='ew', pady=2)
+        self.size_combo.grid(row=8, column=1, sticky='ew', pady=2)
         
         self.frequency_label = ttk.Label(self.control_frame, text="Frequency Column:")
-        self.frequency_label.grid(row=8, column=0, sticky='w', pady=2)
+        self.frequency_label.grid(row=9, column=0, sticky='w', pady=2)
         self.frequency_combo = ttk.Combobox(self.control_frame, textvariable=self.frequency_column_var, state='readonly')
-        self.frequency_combo.grid(row=8, column=1, sticky='ew', pady=2)
+        self.frequency_combo.grid(row=9, column=1, sticky='ew', pady=2)
         
         # Bin count control
-        ttk.Label(self.control_frame, text="Bins:").grid(row=9, column=0, sticky='w', pady=2)
+        ttk.Label(self.control_frame, text="Bins:").grid(row=10, column=0, sticky='w', pady=2)
         
         # Create frame for bin controls
         bin_frame = ttk.Frame(self.control_frame)
-        bin_frame.grid(row=9, column=1, columnspan=2, sticky='ew', pady=2)
+        bin_frame.grid(row=10, column=1, columnspan=2, sticky='ew', pady=2)
         
         # Bin count slider
         self.bin_scale = ttk.Scale(bin_frame, from_=MIN_BIN_COUNT, to=MAX_BIN_COUNT, 
@@ -144,16 +164,16 @@ class MainWindow:
                                                 text="Show Mean & Std Dev Lines", 
                                                 variable=self.show_stats_lines_var,
                                                 command=self._on_stats_toggle)
-        self.stats_lines_check.grid(row=10, column=0, columnspan=2, sticky='w', pady=2)
+        self.stats_lines_check.grid(row=11, column=0, columnspan=2, sticky='w', pady=2)
         
         # Plot button
         self.plot_button = ttk.Button(self.control_frame, text="Create Plot", 
                                      command=self.create_plot, state='disabled')
-        self.plot_button.grid(row=11, column=0, columnspan=2, sticky='ew', pady=10)
+        self.plot_button.grid(row=12, column=0, columnspan=2, sticky='ew', pady=10)
         
         # Stats display
         self.stats_frame = ttk.LabelFrame(self.control_frame, text="Data Info", padding=5)
-        self.stats_frame.grid(row=12, column=0, columnspan=3, sticky='ew', pady=5)
+        self.stats_frame.grid(row=13, column=0, columnspan=3, sticky='ew', pady=5)
         
         self.stats_text = tk.Text(self.stats_frame, height=8, width=30)
         self.stats_text.pack(fill='both', expand=True)
@@ -176,20 +196,198 @@ class MainWindow:
         self.plot_frame.grid(row=0, column=1, sticky='nsew')
     
     def load_file(self):
-        """Load a CSV file."""
+        """Load a CSV file with optional row filtering."""
         file_path = filedialog.askopenfilename(
             title="Select CSV file",
             filetypes=SUPPORTED_FILE_TYPES
         )
         
         if file_path:
-            if self.data_processor.load_csv(file_path):
-                self._update_column_combos()
-                self._update_stats_display()
-                self.plot_button.config(state='normal')
-                messagebox.showinfo("Success", "File loaded successfully!")
+            try:
+                skip_rows = self.skip_rows_var.get()
+                if skip_rows < 0:
+                    skip_rows = 0
+                    self.skip_rows_var.set(0)
+                
+                if self.data_processor.load_csv(file_path, skip_rows):
+                    self._update_column_combos()
+                    self._update_stats_display()
+                    self.plot_button.config(state='normal')
+                    
+                    if skip_rows > 0:
+                        messagebox.showinfo("Success", f"File loaded successfully!\nSkipped {skip_rows} rows.")
+                    else:
+                        messagebox.showinfo("Success", "File loaded successfully!")
+                else:
+                    messagebox.showerror("Error", "Failed to load file. Please check the file format.")
+                    
+            except ValueError:
+                messagebox.showerror("Error", "Please enter a valid number for rows to skip.")
+    
+    def preview_file(self):
+        """Preview a CSV file to help identify junk data."""
+        file_path = filedialog.askopenfilename(
+            title="Select CSV file to preview",
+            filetypes=SUPPORTED_FILE_TYPES
+        )
+        
+        if file_path:
+            # Start with a default preview
+            preview_data = self.data_processor.preview_csv(file_path, preview_rows=15)
+            
+            if preview_data['success']:
+                self._show_enhanced_preview_dialog(preview_data, file_path)
             else:
-                messagebox.showerror("Error", "Failed to load file. Please check the file format.")
+                messagebox.showerror("Preview Error", f"Failed to preview file:\n{preview_data['error']}")
+    
+    def _show_enhanced_preview_dialog(self, initial_preview_data, file_path):
+        """Show an enhanced dialog with configurable preview and filtering options."""
+        preview_window = tk.Toplevel(self.root)
+        preview_window.title("CSV File Preview - Enhanced")
+        preview_window.geometry("950x750")
+        preview_window.grab_set()  # Make it modal
+        
+        # File info header
+        info_frame = ttk.LabelFrame(preview_window, text="File Information", padding=5)
+        info_frame.pack(fill='x', padx=10, pady=5)
+        
+        ttk.Label(info_frame, text=f"File: {file_path.split('/')[-1]}", font=('TkDefaultFont', 9, 'bold')).pack(anchor='w')
+        ttk.Label(info_frame, text=f"Total lines: {initial_preview_data['total_lines']}").pack(anchor='w')
+        ttk.Label(info_frame, text=f"Detected columns: {initial_preview_data['detected_columns']}").pack(anchor='w')
+        
+        # Preview controls section
+        preview_control_frame = ttk.LabelFrame(preview_window, text="Preview Controls", padding=5)
+        preview_control_frame.pack(fill='x', padx=10, pady=5)
+        
+        # Preview length controls
+        controls_row = ttk.Frame(preview_control_frame)
+        controls_row.pack(fill='x')
+        
+        ttk.Label(controls_row, text="Preview lines:").grid(row=0, column=0, sticky='w', padx=(0,5))
+        preview_lines_var = tk.IntVar(value=15)
+        preview_lines_entry = ttk.Entry(controls_row, textvariable=preview_lines_var, width=8)
+        preview_lines_entry.grid(row=0, column=1, padx=5)
+        
+        def refresh_preview():
+            try:
+                num_lines = preview_lines_var.get()
+                if num_lines < 1:
+                    num_lines = 1
+                    preview_lines_var.set(1)
+                elif num_lines > 1000:
+                    num_lines = 1000
+                    preview_lines_var.set(1000)
+                
+                # Get new preview data
+                new_preview_data = self.data_processor.preview_csv(file_path, preview_rows=num_lines)
+                
+                if new_preview_data['success']:
+                    # Clear and update preview text
+                    preview_text.config(state='normal')
+                    preview_text.delete(1.0, tk.END)
+                    
+                    # Add preview content with row numbers
+                    for i, line in enumerate(new_preview_data['preview_lines']):
+                        preview_text.insert(tk.END, f"{i:3d}: {line}\n")
+                    
+                    preview_text.config(state='disabled')
+                    
+                    # Update status
+                    status_label.config(text=f"✓ Showing first {len(new_preview_data['preview_lines'])} lines")
+                else:
+                    messagebox.showerror("Preview Error", f"Failed to refresh preview:\n{new_preview_data['error']}")
+                    
+            except tk.TclError:
+                messagebox.showerror("Error", "Please enter a valid number of lines to preview.")
+        
+        refresh_button = ttk.Button(controls_row, text="🔄 Refresh Preview", command=refresh_preview)
+        refresh_button.grid(row=0, column=2, padx=10)
+        
+        ttk.Label(controls_row, text="(1-1000 lines)", font=('TkDefaultFont', 8)).grid(row=0, column=3, sticky='w', padx=(5,0))
+        
+        # Status label
+        status_label = ttk.Label(controls_row, text=f"✓ Showing first {len(initial_preview_data['preview_lines'])} lines", 
+                               foreground='green', font=('TkDefaultFont', 8))
+        status_label.grid(row=0, column=4, sticky='w', padx=(20,0))
+        
+        # Preview text section
+        preview_section = ttk.LabelFrame(preview_window, text="File Preview", padding=5)
+        preview_section.pack(fill='both', expand=True, padx=10, pady=5)
+        
+        # Text widget with scrollbars
+        text_frame = ttk.Frame(preview_section)
+        text_frame.pack(fill='both', expand=True)
+        
+        preview_text = tk.Text(text_frame, wrap='none', font=('Courier', 9))
+        scrollbar_y = ttk.Scrollbar(text_frame, orient='vertical', command=preview_text.yview)
+        scrollbar_x = ttk.Scrollbar(text_frame, orient='horizontal', command=preview_text.xview)
+        
+        preview_text.configure(yscrollcommand=scrollbar_y.set, xscrollcommand=scrollbar_x.set)
+        
+        preview_text.grid(row=0, column=0, sticky='nsew')
+        scrollbar_y.grid(row=0, column=1, sticky='ns')
+        scrollbar_x.grid(row=1, column=0, sticky='ew')
+        
+        text_frame.grid_rowconfigure(0, weight=1)
+        text_frame.grid_columnconfigure(0, weight=1)
+        
+        # Add initial preview content with row numbers
+        for i, line in enumerate(initial_preview_data['preview_lines']):
+            preview_text.insert(tk.END, f"{i:3d}: {line}\n")
+        
+        preview_text.config(state='disabled')
+        
+        # Allow Enter key to refresh preview
+        preview_lines_entry.bind('<Return>', lambda e: refresh_preview())
+        
+        # Filter controls section
+        filter_frame = ttk.LabelFrame(preview_window, text="Data Filtering Options", padding=10)
+        filter_frame.pack(fill='x', padx=10, pady=5)
+        
+        filter_row = ttk.Frame(filter_frame)
+        filter_row.pack(fill='x')
+        
+        ttk.Label(filter_row, text="Skip rows from top:").grid(row=0, column=0, sticky='w')
+        skip_var = tk.IntVar(value=self.skip_rows_var.get())
+        skip_entry = ttk.Entry(filter_row, textvariable=skip_var, width=6)
+        skip_entry.grid(row=0, column=1, padx=10)
+        
+        ttk.Label(filter_row, text="(Use this to skip headers, metadata, or junk data)", 
+                 font=('TkDefaultFont', 8)).grid(row=0, column=2, sticky='w', padx=(10,0))
+        
+        # Buttons section
+        button_frame = ttk.Frame(preview_window)
+        button_frame.pack(fill='x', padx=10, pady=10)
+        
+        def load_with_filter():
+            try:
+                skip_rows = skip_var.get()
+                if skip_rows < 0:
+                    skip_rows = 0
+                    
+                self.skip_rows_var.set(skip_rows)
+                preview_window.destroy()
+                
+                if self.data_processor.load_csv(file_path, skip_rows):
+                    self._update_column_combos()
+                    self._update_stats_display()
+                    self.plot_button.config(state='normal')
+                    if skip_rows > 0:
+                        messagebox.showinfo("Success", f"File loaded successfully!\nSkipped {skip_rows} rows.")
+                    else:
+                        messagebox.showinfo("Success", "File loaded successfully!")
+                else:
+                    messagebox.showerror("Error", "Failed to load file. Please check the file format.")
+                    
+            except tk.TclError:
+                messagebox.showerror("Error", "Please enter a valid number for rows to skip.")
+        
+        ttk.Button(button_frame, text="📁 Load with Filter", command=load_with_filter).pack(side='left', padx=5)
+        ttk.Button(button_frame, text="❌ Cancel", command=preview_window.destroy).pack(side='left', padx=5)
+        
+        # Focus on preview lines entry for immediate use
+        preview_lines_entry.focus_set()
+        preview_lines_entry.select_range(0, tk.END)
     
     def generate_random_data(self):
         """Generate random particle data for testing."""
