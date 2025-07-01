@@ -12,6 +12,13 @@ from core.data_processor import ParticleDataProcessor
 from core.plotter import ParticlePlotter
 from config.constants import SUPPORTED_FILE_TYPES, MIN_BIN_COUNT, MAX_BIN_COUNT, DEFAULT_BIN_COUNT, RANDOM_DATA_BOUNDS
 
+# Try to import report generation (optional dependency)
+try:
+    from reports.templates import StandardReportTemplate
+    REPORTS_AVAILABLE = True
+except ImportError:
+    REPORTS_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 class MainWindow:
@@ -41,6 +48,13 @@ class MainWindow:
         
         # Track current figure for proper cleanup
         self.current_figure = None
+        self._current_filename = None  # Track loaded filename for reports
+        
+        # Report generation
+        if REPORTS_AVAILABLE:
+            self.report_template = StandardReportTemplate()
+        else:
+            self.report_template = None
         
         self._create_widgets()
         self._create_layout()
@@ -171,9 +185,18 @@ class MainWindow:
                                      command=self.create_plot, state='disabled')
         self.plot_button.grid(row=12, column=0, columnspan=2, sticky='ew', pady=10)
         
+        # Report generation button
+        self.report_button = ttk.Button(self.control_frame, text="Generate Report", 
+                                       command=self.generate_report, state='disabled')
+        self.report_button.grid(row=13, column=0, columnspan=2, sticky='ew', pady=5)
+        
+        # Show/hide report button based on availability
+        if not REPORTS_AVAILABLE:
+            self.report_button.config(state='disabled', text="Generate Report (ReportLab not installed)")
+        
         # Stats display
         self.stats_frame = ttk.LabelFrame(self.control_frame, text="Data Info", padding=5)
-        self.stats_frame.grid(row=13, column=0, columnspan=3, sticky='ew', pady=5)
+        self.stats_frame.grid(row=14, column=0, columnspan=3, sticky='ew', pady=5)
         
         self.stats_text = tk.Text(self.stats_frame, height=8, width=30)
         self.stats_text.pack(fill='both', expand=True)
@@ -203,6 +226,7 @@ class MainWindow:
         )
         
         if file_path:
+            self._current_filename = file_path.split('/')[-1]  # Store filename for reports
             try:
                 skip_rows = self.skip_rows_var.get()
                 if skip_rows < 0:
@@ -372,6 +396,7 @@ class MainWindow:
                     self._update_column_combos()
                     self._update_stats_display()
                     self.plot_button.config(state='normal')
+                    self._update_report_button_state()
                     if skip_rows > 0:
                         messagebox.showinfo("Success", f"File loaded successfully!\nSkipped {skip_rows} rows.")
                     else:
@@ -404,10 +429,12 @@ class MainWindow:
                 self.data_processor.set_data_mode('pre_aggregated')
                 self.data_mode_var.set('pre_aggregated')
                 self._update_data_mode_ui()
+                self._current_filename = "Generated Random Data"  # Set filename for reports
                 
                 self._update_column_combos()
                 self._update_stats_display()
                 self.plot_button.config(state='normal')
+                self._update_report_button_state()
                 messagebox.showinfo("Success", f"Generated {n} random data points!")
             else:
                 messagebox.showerror("Error", "Failed to generate random data.")
@@ -431,6 +458,76 @@ class MainWindow:
         # If we have a current plot, update it
         if hasattr(self, 'canvas') and self.data_processor.data is not None:
             self._update_plot()
+    
+    def _update_report_button_state(self):
+        """Update the report button state based on available data and plot."""
+        if REPORTS_AVAILABLE and hasattr(self, 'canvas') and self.current_figure:
+            self.report_button.config(state='normal')
+        else:
+            if REPORTS_AVAILABLE:
+                self.report_button.config(state='disabled')
+    
+    def generate_report(self):
+        """Generate a PDF report with current analysis."""
+        if not REPORTS_AVAILABLE:
+            messagebox.showerror("Error", "ReportLab is not installed. Please install it with: pip install reportlab")
+            return
+        
+        if not hasattr(self, 'canvas') or not self.current_figure:
+            messagebox.showerror("Error", "Please create a plot first before generating a report.")
+            return
+        
+        # Get save location from user
+        file_path = filedialog.asksaveasfilename(
+            title="Save Report As",
+            defaultextension=".pdf",
+            filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")]
+        )
+        
+        if not file_path:
+            return  # User cancelled
+        
+        try:
+            # Collect current analysis data
+            data_stats = self.data_processor.get_data_stats()
+            
+            # Collect analysis parameters
+            analysis_params = {
+                'data_mode': self.data_mode_var.get(),
+                'bin_count': self.bin_count_var.get(),
+                'size_column': self.size_column_var.get(),
+                'frequency_column': self.frequency_column_var.get(),
+                'skip_rows': self.skip_rows_var.get(),
+                'show_stats_lines': self.show_stats_lines_var.get()
+            }
+            
+            # File information (if available)
+            file_info = {
+                'filename': getattr(self, '_current_filename', 'Generated Data'),
+                'generated_at': self._get_current_timestamp()
+            }
+            
+            # Generate the report
+            success = self.report_template.create_report(
+                output_path=file_path,
+                plot_figure=self.current_figure,
+                data_stats=data_stats,
+                analysis_params=analysis_params,
+                file_info=file_info
+            )
+            
+            if success:
+                messagebox.showinfo("Success", f"Report generated successfully!\nSaved to: {file_path}")
+            else:
+                messagebox.showerror("Error", "Failed to generate report. Check console for details.")
+                
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to generate report: {str(e)}")
+    
+    def _get_current_timestamp(self):
+        """Get current timestamp for report."""
+        from datetime import datetime
+        return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     def _update_data_mode_ui(self):
         """Update UI elements based on current data mode."""
@@ -575,6 +672,7 @@ class MainWindow:
         if figure is not None:
             self.current_figure = figure  # Store reference to current figure
             self._display_plot(figure)
+            self._update_report_button_state()  # Enable report button when plot is created
         else:
             messagebox.showerror("Error", "Failed to create plot.")
     
@@ -599,6 +697,7 @@ class MainWindow:
             
             if figure is not None:
                 self._display_plot(figure)
+                self._update_report_button_state()  # Update report button after plot update
     
     def _display_plot(self, figure):
         """Display the plot in the GUI."""
