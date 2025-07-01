@@ -4,3 +4,5 @@ config/__pycache__/
 core/__pycache__/
 gui/__pycache__/
 tests/__pycache__/
+reports/__pycache__/
+reports/templates/__pycache__/
