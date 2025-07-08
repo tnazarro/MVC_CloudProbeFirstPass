@@ -1,5 +1,5 @@
 """
-PDF report generation module for particle data analysis.
+PDF report generation module for particle data analysis with dataset information.
 """
 
 import io
@@ -65,6 +65,17 @@ class PDFReportGenerator:
             fontSize=10,
             fontName='Courier'
         ))
+        
+        # Notes style
+        self.styles.add(ParagraphStyle(
+            name='NotesText',
+            parent=self.styles['Normal'],
+            fontSize=10,
+            leftIndent=20,
+            rightIndent=20,
+            spaceBefore=5,
+            spaceAfter=10
+        ))
     
     def generate_report(self, 
                        output_path: str,
@@ -80,7 +91,7 @@ class PDFReportGenerator:
             plot_figure: Matplotlib figure to include in report
             data_stats: Dictionary of data statistics
             analysis_params: Analysis parameters (bins, mode, etc.)
-            file_info: Optional file information
+            file_info: Optional file information including dataset tag and notes
             
         Returns:
             bool: True if successful, False otherwise
@@ -101,6 +112,9 @@ class PDFReportGenerator:
             
             # Title and header
             story.extend(self._create_header(file_info))
+            
+            # Dataset information section (includes tag and notes)
+            story.extend(self._create_dataset_section(file_info))
             
             # Analysis summary
             story.extend(self._create_analysis_summary(analysis_params))
@@ -137,12 +151,53 @@ class PDFReportGenerator:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         info_text = f"<b>Report Generated:</b> {timestamp}"
         
-        if file_info and 'filename' in file_info:
-            info_text += f"<br/><b>Source File:</b> {file_info['filename']}"
-        
         elements.append(Paragraph(info_text, self.styles['Normal']))
         elements.append(Spacer(1, 20))
         
+        return elements
+    
+    def _create_dataset_section(self, file_info: Optional[Dict[str, Any]]) -> list:
+        """Create the dataset information section with tag and notes."""
+        elements = []
+        
+        if not file_info:
+            return elements
+        
+        elements.append(Paragraph("Dataset Information", self.styles['Subtitle']))
+        
+        # Create dataset info table
+        dataset_data = []
+        
+        if 'dataset_tag' in file_info:
+            dataset_data.append(['Dataset Tag:', file_info['dataset_tag']])
+        
+        if 'filename' in file_info:
+            dataset_data.append(['Source File:', file_info['filename']])
+        
+        if dataset_data:
+            dataset_table = Table(dataset_data, colWidths=[2*inch, 4*inch])
+            dataset_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (0, -1), colors.lightgreen),
+                ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+                ('FONTNAME', (1, 0), (1, -1), 'Helvetica'),
+                ('FONTSIZE', (0, 0), (-1, -1), 10),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ]))
+            elements.append(dataset_table)
+        
+        # Add dataset notes if present
+        if 'dataset_notes' in file_info and file_info['dataset_notes'].strip():
+            elements.append(Spacer(1, 10))
+            elements.append(Paragraph("<b>Dataset Notes:</b>", self.styles['Normal']))
+            notes_text = file_info['dataset_notes'].strip()
+            # Escape any HTML-like characters in notes
+            notes_text = notes_text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+            elements.append(Paragraph(notes_text, self.styles['NotesText']))
+        
+        elements.append(Spacer(1, 20))
         return elements
     
     def _create_analysis_summary(self, analysis_params: Dict[str, Any]) -> list:

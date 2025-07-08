@@ -12,7 +12,7 @@ SUPPORTED_FILE_TYPES = [
 # Default plot settings
 DEFAULT_BIN_COUNT = 50
 MIN_BIN_COUNT = 10
-MAX_BIN_COUNT = 200
+MAX_BIN_COUNT = 1000
 
 # Column name mappings (common names for particle size data)
 SIZE_COLUMN_NAMES = ['size', 'diameter', 'particle_size', 'Size', 'Diameter']

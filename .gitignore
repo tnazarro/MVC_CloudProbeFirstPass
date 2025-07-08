@@ -6,3 +6,4 @@ gui/__pycache__/
 tests/__pycache__/
 reports/__pycache__/
 reports/templates/__pycache__/
+core/__init__.pyc
