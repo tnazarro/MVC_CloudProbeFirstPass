@@ -1,18 +1,19 @@
 """
-Main GUI window for the Particle Data Analyzer.
+Main GUI window for the Particle Data Analyzer with Dataset Manager integration.
 """
 
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+from tkinter import ttk, filedialog, messagebox, simpledialog
 import logging
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 import matplotlib.pyplot as plt
 
 from core.data_processor import ParticleDataProcessor
+from core.dataset_manager import DatasetManager
 from core.plotter import ParticlePlotter
 from config.constants import SUPPORTED_FILE_TYPES, MIN_BIN_COUNT, MAX_BIN_COUNT, DEFAULT_BIN_COUNT, RANDOM_DATA_BOUNDS
 
-# Try to import report generation (optional dependency)
+# Try to import report generation (now required dependency)
 try:
     from reports.templates import StandardReportTemplate
     REPORTS_AVAILABLE = True
@@ -22,18 +23,18 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 class MainWindow:
-    """Main application window."""
+    """Main application window with dataset management."""
     
     def __init__(self, root):
         self.root = root
         self.root.title("Particle Data Analyzer")
-        self.root.geometry("1200x800")
+        self.root.geometry("1400x900")  # Slightly larger to accommodate dataset list
         
         # Set up proper close handling
         self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
         
         # Initialize core components
-        self.data_processor = ParticleDataProcessor()
+        self.dataset_manager = DatasetManager()
         self.plotter = ParticlePlotter()
         
         # GUI variables
@@ -48,7 +49,6 @@ class MainWindow:
         
         # Track current figure for proper cleanup
         self.current_figure = None
-        self._current_filename = None  # Track loaded filename for reports
         
         # Report generation
         if REPORTS_AVAILABLE:
@@ -61,6 +61,7 @@ class MainWindow:
         
         # Initialize UI state
         self._update_data_mode_ui()
+        self._update_dataset_ui()
     
     def _create_widgets(self):
         """Create all GUI widgets."""
@@ -70,7 +71,7 @@ class MainWindow:
         # Control frame (left side)
         self.control_frame = ttk.LabelFrame(self.main_frame, text="Controls", padding=10)
         
-        # File loading with preview
+        # === FILE LOADING CONTROLS ===
         ttk.Label(self.control_frame, text="Data File:").grid(row=0, column=0, sticky='w', pady=2)
         
         file_frame = ttk.Frame(self.control_frame)
@@ -94,7 +95,7 @@ class MainWindow:
         
         ttk.Label(filter_frame, text="(header rows, metadata, etc.)").grid(row=0, column=2, sticky='w', padx=(5,0))
         
-        # Random data generation
+        # === RANDOM DATA GENERATION ===
         ttk.Separator(self.control_frame, orient='horizontal').grid(row=2, column=0, columnspan=3, sticky='ew', pady=5)
         
         ttk.Label(self.control_frame, text="Generate Random Data:").grid(row=3, column=0, sticky='w', pady=2)
@@ -116,6 +117,7 @@ class MainWindow:
         self.generate_button = ttk.Button(random_frame, text="Generate", command=self.generate_random_data)
         self.generate_button.grid(row=0, column=4, padx=5)
         
+        # === DATA ANALYSIS CONTROLS ===
         ttk.Separator(self.control_frame, orient='horizontal').grid(row=5, column=0, columnspan=3, sticky='ew', pady=5)
         
         # Data mode selection
@@ -134,24 +136,26 @@ class MainWindow:
                                        command=self._on_data_mode_change)
         self.raw_radio.grid(row=1, column=0, sticky='w')
         
-        ttk.Separator(self.control_frame, orient='horizontal').grid(row=7, column=0, columnspan=3, sticky='ew', pady=5)
-        
         # Column selection
-        ttk.Label(self.control_frame, text="Size Column:").grid(row=8, column=0, sticky='w', pady=2)
-        self.size_combo = ttk.Combobox(self.control_frame, textvariable=self.size_column_var, state='readonly')
-        self.size_combo.grid(row=8, column=1, sticky='ew', pady=2)
+        ttk.Label(self.control_frame, text="Size Column:").grid(row=7, column=0, sticky='w', pady=2)
+        self.size_combo = ttk.Combobox(self.control_frame, textvariable=self.size_column_var, 
+                                      state='readonly')
+        self.size_combo.grid(row=7, column=1, sticky='ew', pady=2)
+        self.size_combo.bind('<<ComboboxSelected>>', self._on_column_change)
         
         self.frequency_label = ttk.Label(self.control_frame, text="Frequency Column:")
-        self.frequency_label.grid(row=9, column=0, sticky='w', pady=2)
-        self.frequency_combo = ttk.Combobox(self.control_frame, textvariable=self.frequency_column_var, state='readonly')
-        self.frequency_combo.grid(row=9, column=1, sticky='ew', pady=2)
+        self.frequency_label.grid(row=8, column=0, sticky='w', pady=2)
+        self.frequency_combo = ttk.Combobox(self.control_frame, textvariable=self.frequency_column_var, 
+                                           state='readonly')
+        self.frequency_combo.grid(row=8, column=1, sticky='ew', pady=2)
+        self.frequency_combo.bind('<<ComboboxSelected>>', self._on_column_change)
         
         # Bin count control
-        ttk.Label(self.control_frame, text="Bins:").grid(row=10, column=0, sticky='w', pady=2)
+        ttk.Label(self.control_frame, text="Bins:").grid(row=9, column=0, sticky='w', pady=2)
         
         # Create frame for bin controls
         bin_frame = ttk.Frame(self.control_frame)
-        bin_frame.grid(row=10, column=1, columnspan=2, sticky='ew', pady=2)
+        bin_frame.grid(row=9, column=1, columnspan=2, sticky='ew', pady=2)
         
         # Bin count slider
         self.bin_scale = ttk.Scale(bin_frame, from_=MIN_BIN_COUNT, to=MAX_BIN_COUNT, 
@@ -178,30 +182,89 @@ class MainWindow:
                                                 text="Show Mean & Std Dev Lines", 
                                                 variable=self.show_stats_lines_var,
                                                 command=self._on_stats_toggle)
-        self.stats_lines_check.grid(row=11, column=0, columnspan=2, sticky='w', pady=2)
+        self.stats_lines_check.grid(row=10, column=0, columnspan=2, sticky='w', pady=2)
         
         # Plot button
         self.plot_button = ttk.Button(self.control_frame, text="Create Plot", 
                                      command=self.create_plot, state='disabled')
-        self.plot_button.grid(row=12, column=0, columnspan=2, sticky='ew', pady=10)
+        self.plot_button.grid(row=11, column=0, columnspan=2, sticky='ew', pady=10)
         
         # Report generation button
         self.report_button = ttk.Button(self.control_frame, text="Generate Report", 
                                        command=self.generate_report, state='disabled')
-        self.report_button.grid(row=13, column=0, columnspan=2, sticky='ew', pady=5)
+        self.report_button.grid(row=12, column=0, columnspan=2, sticky='ew', pady=5)
         
         # Show/hide report button based on availability
         if not REPORTS_AVAILABLE:
             self.report_button.config(state='disabled', text="Generate Report (ReportLab not installed)")
         
+        # === DATASET MANAGEMENT CONTROLS ===
+        ttk.Separator(self.control_frame, orient='horizontal').grid(row=13, column=0, columnspan=3, sticky='ew', pady=10)
+        
+        # Dataset management frame
+        self.dataset_mgmt_frame = ttk.LabelFrame(self.control_frame, text="Dataset Management", padding=5)
+        self.dataset_mgmt_frame.grid(row=14, column=0, columnspan=3, sticky='ew', pady=5)
+        
+        # Dataset navigation
+        nav_frame = ttk.Frame(self.dataset_mgmt_frame)
+        nav_frame.pack(fill='x', pady=5)
+        
+        self.prev_dataset_btn = ttk.Button(nav_frame, text="◀ Previous", 
+                                          command=self.previous_dataset, state='disabled')
+        self.prev_dataset_btn.pack(side='left', padx=(0,5))
+        
+        self.next_dataset_btn = ttk.Button(nav_frame, text="Next ▶", 
+                                          command=self.next_dataset, state='disabled')
+        self.next_dataset_btn.pack(side='left')
+        
+        # Dataset info display
+        self.dataset_info_frame = ttk.Frame(self.dataset_mgmt_frame)
+        self.dataset_info_frame.pack(fill='x', pady=5)
+        
+        self.dataset_info_label = ttk.Label(self.dataset_info_frame, text="No datasets loaded", 
+                                           font=('TkDefaultFont', 9, 'bold'))
+        self.dataset_info_label.pack(anchor='w')
+        
+        # Dataset actions
+        actions_frame = ttk.Frame(self.dataset_mgmt_frame)
+        actions_frame.pack(fill='x', pady=5)
+        
+        self.edit_tag_btn = ttk.Button(actions_frame, text="Edit Tag", 
+                                      command=self.edit_dataset_tag, state='disabled')
+        self.edit_tag_btn.pack(side='left', padx=(0,5))
+        
+        self.edit_notes_btn = ttk.Button(actions_frame, text="Edit Notes", 
+                                        command=self.edit_dataset_notes, state='disabled')
+        self.edit_notes_btn.pack(side='left', padx=(0,5))
+        
+        self.remove_dataset_btn = ttk.Button(actions_frame, text="Remove", 
+                                            command=self.remove_dataset, state='disabled')
+        self.remove_dataset_btn.pack(side='left')
+        
         # Stats display
         self.stats_frame = ttk.LabelFrame(self.control_frame, text="Data Info", padding=5)
-        self.stats_frame.grid(row=14, column=0, columnspan=3, sticky='ew', pady=5)
+        self.stats_frame.grid(row=15, column=0, columnspan=3, sticky='ew', pady=5)
         
         self.stats_text = tk.Text(self.stats_frame, height=8, width=30)
         self.stats_text.pack(fill='both', expand=True)
         
-        # Plot frame (right side)
+        # === DATASET LIST (Center) ===
+        self.dataset_list_frame = ttk.LabelFrame(self.main_frame, text="Loaded Datasets", padding=5)
+        
+        # Dataset listbox with scrollbar
+        list_container = ttk.Frame(self.dataset_list_frame)
+        list_container.pack(fill='both', expand=True)
+        
+        self.dataset_listbox = tk.Listbox(list_container, height=6, selectmode='single')
+        dataset_scrollbar = ttk.Scrollbar(list_container, orient='vertical', command=self.dataset_listbox.yview)
+        
+        self.dataset_listbox.configure(yscrollcommand=dataset_scrollbar.set)
+        self.dataset_listbox.bind('<<ListboxSelect>>', self._on_dataset_select)
+        
+        self.dataset_listbox.pack(side='left', fill='both', expand=True)
+        dataset_scrollbar.pack(side='right', fill='y')
+        
+        # === PLOT FRAME (Right side) ===
         self.plot_frame = ttk.LabelFrame(self.main_frame, text="Plot", padding=10)
         
         # Configure column weights
@@ -211,37 +274,55 @@ class MainWindow:
         """Arrange widgets in the window."""
         self.main_frame.pack(fill='both', expand=True, padx=5, pady=5)
         
-        # Use grid for main layout
-        self.main_frame.columnconfigure(1, weight=1)
+        # Use grid for main layout: controls | dataset list | plot
+        self.main_frame.columnconfigure(2, weight=1)  # Plot gets most space
         self.main_frame.rowconfigure(0, weight=1)
         
         self.control_frame.grid(row=0, column=0, sticky='nsew', padx=(0, 5))
-        self.plot_frame.grid(row=0, column=1, sticky='nsew')
+        self.dataset_list_frame.grid(row=0, column=1, sticky='nsew', padx=(0, 5))
+        self.plot_frame.grid(row=0, column=2, sticky='nsew')
     
     def load_file(self):
-        """Load a CSV file with optional row filtering."""
+        """Load a CSV file and add it to the dataset manager."""
         file_path = filedialog.askopenfilename(
             title="Select CSV file",
             filetypes=SUPPORTED_FILE_TYPES
         )
         
         if file_path:
-            self._current_filename = file_path.split('/')[-1]  # Store filename for reports
             try:
                 skip_rows = self.skip_rows_var.get()
                 if skip_rows < 0:
                     skip_rows = 0
                     self.skip_rows_var.set(0)
                 
-                if self.data_processor.load_csv(file_path, skip_rows):
+                # Create a default tag from filename
+                filename = file_path.split('/')[-1].split('\\')[-1]
+                default_tag = filename.replace('.csv', '').replace('.CSV', '')
+                
+                # Add dataset to manager
+                dataset_id = self.dataset_manager.add_dataset(
+                    file_path=file_path,
+                    tag=default_tag,
+                    notes="",
+                    skip_rows=skip_rows
+                )
+                
+                if dataset_id:
+                    # Set as active dataset
+                    self.dataset_manager.set_active_dataset(dataset_id)
+                    
+                    # Update UI
+                    self._update_dataset_ui()
+                    self._load_active_dataset_settings()
                     self._update_column_combos()
                     self._update_stats_display()
                     self.plot_button.config(state='normal')
                     
                     if skip_rows > 0:
-                        messagebox.showinfo("Success", f"File loaded successfully!\nSkipped {skip_rows} rows.")
+                        messagebox.showinfo("Success", f"Dataset '{default_tag}' loaded successfully!\nSkipped {skip_rows} rows.")
                     else:
-                        messagebox.showinfo("Success", "File loaded successfully!")
+                        messagebox.showinfo("Success", f"Dataset '{default_tag}' loaded successfully!")
                 else:
                     messagebox.showerror("Error", "Failed to load file. Please check the file format.")
                     
@@ -256,8 +337,9 @@ class MainWindow:
         )
         
         if file_path:
-            # Start with a default preview
-            preview_data = self.data_processor.preview_csv(file_path, preview_rows=15)
+            # Create a temporary data processor for preview
+            temp_processor = ParticleDataProcessor()
+            preview_data = temp_processor.preview_csv(file_path, preview_rows=15)
             
             if preview_data['success']:
                 self._show_enhanced_preview_dialog(preview_data, file_path)
@@ -303,7 +385,8 @@ class MainWindow:
                     preview_lines_var.set(1000)
                 
                 # Get new preview data
-                new_preview_data = self.data_processor.preview_csv(file_path, preview_rows=num_lines)
+                temp_processor = ParticleDataProcessor()
+                new_preview_data = temp_processor.preview_csv(file_path, preview_rows=num_lines)
                 
                 if new_preview_data['success']:
                     # Clear and update preview text
@@ -392,15 +475,34 @@ class MainWindow:
                 self.skip_rows_var.set(skip_rows)
                 preview_window.destroy()
                 
-                if self.data_processor.load_csv(file_path, skip_rows):
+                # Create a default tag from filename
+                filename = file_path.split('/')[-1].split('\\')[-1]
+                default_tag = filename.replace('.csv', '').replace('.CSV', '')
+                
+                # Add dataset to manager
+                dataset_id = self.dataset_manager.add_dataset(
+                    file_path=file_path,
+                    tag=default_tag,
+                    notes="",
+                    skip_rows=skip_rows
+                )
+                
+                if dataset_id:
+                    # Set as active dataset
+                    self.dataset_manager.set_active_dataset(dataset_id)
+                    
+                    # Update UI
+                    self._update_dataset_ui()
+                    self._load_active_dataset_settings()
                     self._update_column_combos()
                     self._update_stats_display()
                     self.plot_button.config(state='normal')
                     self._update_report_button_state()
+                    
                     if skip_rows > 0:
-                        messagebox.showinfo("Success", f"File loaded successfully!\nSkipped {skip_rows} rows.")
+                        messagebox.showinfo("Success", f"Dataset '{default_tag}' loaded successfully!\nSkipped {skip_rows} rows.")
                     else:
-                        messagebox.showinfo("Success", "File loaded successfully!")
+                        messagebox.showinfo("Success", f"Dataset '{default_tag}' loaded successfully!")
                 else:
                     messagebox.showerror("Error", "Failed to load file. Please check the file format.")
                     
@@ -424,39 +526,397 @@ class MainWindow:
                 messagebox.showerror("Error", "Number of points must be positive.")
                 return
             
-            if self.data_processor.generate_random_data(n, distribution):
-                # Set data mode to match generated data (always pre-aggregated for random data)
-                self.data_processor.set_data_mode('pre_aggregated')
-                self.data_mode_var.set('pre_aggregated')
-                self._update_data_mode_ui()
-                self._current_filename = "Generated Random Data"  # Set filename for reports
+            # Create temporary processor for random data generation
+            temp_processor = ParticleDataProcessor()
+            if temp_processor.generate_random_data(n, distribution):
+                # Add to dataset manager
+                tag = f"Random {distribution.title()} ({n} points)"
+                notes = f"Generated {distribution} distribution with {n} data points"
                 
-                self._update_column_combos()
-                self._update_stats_display()
-                self.plot_button.config(state='normal')
-                self._update_report_button_state()
-                messagebox.showinfo("Success", f"Generated {n} random data points!")
+                # We need to save the random data first since DatasetManager expects a file
+                # For now, we'll use a special internal method
+                dataset_id = self._add_generated_dataset(temp_processor, tag, notes)
+                
+                if dataset_id:
+                    # Set as active dataset
+                    self.dataset_manager.set_active_dataset(dataset_id)
+                    
+                    # Update UI
+                    self._update_dataset_ui()
+                    self._load_active_dataset_settings()
+                    self._update_column_combos()
+                    self._update_stats_display()
+                    self.plot_button.config(state='normal')
+                    self._update_report_button_state()
+                    messagebox.showinfo("Success", f"Generated dataset '{tag}' successfully!")
+                else:
+                    messagebox.showerror("Error", "Failed to add generated data to dataset manager.")
             else:
                 messagebox.showerror("Error", "Failed to generate random data.")
                 
         except tk.TclError:
             messagebox.showerror("Error", "Please enter a valid number of points.")
     
+    def _add_generated_dataset(self, data_processor, tag, notes):
+        """Add a generated dataset to the dataset manager."""
+        import uuid
+        from datetime import datetime
+        
+        try:
+            # Create unique ID for this dataset
+            dataset_id = str(uuid.uuid4())
+            
+            # Assign color
+            color = self.dataset_manager._get_next_color()
+            
+            # Create dataset entry for generated data
+            dataset_info = {
+                'id': dataset_id,
+                'filename': 'Generated Data',
+                'file_path': None,  # No file path for generated data
+                'tag': tag,
+                'notes': notes,
+                'color': color,
+                'data_processor': data_processor,
+                'loaded_at': datetime.now(),
+                'skip_rows': 0,
+                # Store current analysis settings per dataset
+                'analysis_settings': {
+                    'data_mode': 'pre_aggregated',  # Generated data is always pre-aggregated
+                    'bin_count': 50,
+                    'size_column': data_processor.size_column,
+                    'frequency_column': data_processor.frequency_column,
+                    'show_stats_lines': True
+                }
+            }
+            
+            # Add to collection
+            self.dataset_manager.datasets[dataset_id] = dataset_info
+            
+            # Set as active if it's the first dataset
+            if self.dataset_manager.active_dataset_id is None:
+                self.dataset_manager.active_dataset_id = dataset_id
+            
+            logger.info(f"Added generated dataset: {tag} (ID: {dataset_id})")
+            return dataset_id
+            
+        except Exception as e:
+            logger.error(f"Error adding generated dataset: {e}")
+            return None
+    
+    # === DATASET MANAGEMENT METHODS ===
+    
+    def _update_dataset_ui(self):
+        """Update all dataset-related UI elements."""
+        self._update_dataset_listbox()
+        self._update_dataset_info()
+        self._update_navigation_buttons()
+    
+    def _update_dataset_listbox(self):
+        """Update the dataset listbox with current datasets."""
+        self.dataset_listbox.delete(0, tk.END)
+        
+        datasets = self.dataset_manager.get_all_datasets()
+        active_id = self.dataset_manager.active_dataset_id
+        
+        for i, dataset in enumerate(datasets):
+            # Format: "[Tag] - filename" with color indicator for better visibility
+            if dataset['filename'] != 'Generated Data':
+                display_text = f"● [{dataset['tag']}] - {dataset['filename']}"
+            else:
+                display_text = f"● [{dataset['tag']}] - Generated"
+            
+            self.dataset_listbox.insert(tk.END, display_text)
+            
+            # Highlight active dataset
+            if dataset['id'] == active_id:
+                self.dataset_listbox.selection_set(i)
+                self.dataset_listbox.see(i)
+    
+    def _update_dataset_info(self):
+        """Update the dataset info display."""
+        active_dataset = self.dataset_manager.get_active_dataset()
+        
+        if active_dataset:
+            info_text = f"Active: {active_dataset['tag']}"
+            if active_dataset['notes']:
+                info_text += f"\nNotes: {active_dataset['notes'][:50]}..."
+            
+            self.dataset_info_label.config(text=info_text)
+        else:
+            self.dataset_info_label.config(text="No datasets loaded")
+    
+    def _update_navigation_buttons(self):
+        """Update the state of navigation and action buttons."""
+        has_datasets = self.dataset_manager.has_datasets()
+        has_multiple = self.dataset_manager.get_dataset_count() > 1
+        
+        # Navigation buttons
+        self.prev_dataset_btn.config(state='normal' if has_multiple else 'disabled')
+        self.next_dataset_btn.config(state='normal' if has_multiple else 'disabled')
+        
+        # Action buttons
+        self.edit_tag_btn.config(state='normal' if has_datasets else 'disabled')
+        self.edit_notes_btn.config(state='normal' if has_datasets else 'disabled')
+        self.remove_dataset_btn.config(state='normal' if has_datasets else 'disabled')
+    
+    def _on_dataset_select(self, event):
+        """Handle dataset selection from listbox."""
+        selection = self.dataset_listbox.curselection()
+        if selection:
+            # Get the dataset ID based on selection index
+            datasets = self.dataset_manager.get_all_datasets()
+            if selection[0] < len(datasets):
+                selected_dataset = datasets[selection[0]]
+                self.dataset_manager.set_active_dataset(selected_dataset['id'])
+                
+                # Update UI for new active dataset
+                self._load_active_dataset_settings()
+                self._update_dataset_info()
+                self._update_column_combos()
+                self._update_stats_display()
+                
+                # Update plot if auto-plot is desired
+                if hasattr(self, 'canvas') and self.dataset_manager.get_active_dataset():
+                    self._update_plot()
+    
+    def previous_dataset(self):
+        """Navigate to previous dataset."""
+        prev_id = self.dataset_manager.get_previous_dataset_id()
+        if prev_id:
+            self.dataset_manager.set_active_dataset(prev_id)
+            self._load_active_dataset_settings()
+            self._update_dataset_ui()
+            self._update_column_combos()
+            self._update_stats_display()
+            
+            # Update plot if one exists
+            if hasattr(self, 'canvas'):
+                self._update_plot()
+    
+    def next_dataset(self):
+        """Navigate to next dataset."""
+        next_id = self.dataset_manager.get_next_dataset_id()
+        if next_id:
+            self.dataset_manager.set_active_dataset(next_id)
+            self._load_active_dataset_settings()
+            self._update_dataset_ui()
+            self._update_column_combos()
+            self._update_stats_display()
+            
+            # Update plot if one exists
+            if hasattr(self, 'canvas'):
+                self._update_plot()
+    
+    def edit_dataset_tag(self):
+        """Edit the tag of the active dataset."""
+        active_dataset = self.dataset_manager.get_active_dataset()
+        if not active_dataset:
+            return
+        
+        new_tag = simpledialog.askstring(
+            "Edit Dataset Tag",
+            "Enter new tag:",
+            initialvalue=active_dataset['tag']
+        )
+        
+        if new_tag and new_tag.strip():
+            self.dataset_manager.update_dataset_tag(active_dataset['id'], new_tag.strip())
+            self._update_dataset_ui()
+    
+    def edit_dataset_notes(self):
+        """Edit the notes of the active dataset."""
+        active_dataset = self.dataset_manager.get_active_dataset()
+        if not active_dataset:
+            return
+        
+        # Create a dialog for multi-line notes editing
+        self._show_notes_editor(active_dataset)
+    
+    def _show_notes_editor(self, dataset):
+        """Show a dialog for editing dataset notes."""
+        notes_window = tk.Toplevel(self.root)
+        notes_window.title(f"Edit Notes - {dataset['tag']}")
+        notes_window.geometry("500x300")
+        notes_window.grab_set()
+        
+        # Notes text area
+        ttk.Label(notes_window, text="Dataset Notes:").pack(anchor='w', padx=10, pady=(10,5))
+        
+        text_frame = ttk.Frame(notes_window)
+        text_frame.pack(fill='both', expand=True, padx=10, pady=5)
+        
+        notes_text = tk.Text(text_frame, wrap='word')
+        scrollbar = ttk.Scrollbar(text_frame, orient='vertical', command=notes_text.yview)
+        notes_text.configure(yscrollcommand=scrollbar.set)
+        
+        notes_text.pack(side='left', fill='both', expand=True)
+        scrollbar.pack(side='right', fill='y')
+        
+        # Insert current notes
+        notes_text.insert(1.0, dataset['notes'])
+        
+        # Buttons
+        button_frame = ttk.Frame(notes_window)
+        button_frame.pack(fill='x', padx=10, pady=10)
+        
+        def save_notes():
+            new_notes = notes_text.get(1.0, tk.END).strip()
+            self.dataset_manager.update_dataset_notes(dataset['id'], new_notes)
+            self._update_dataset_ui()
+            notes_window.destroy()
+        
+        ttk.Button(button_frame, text="Save", command=save_notes).pack(side='right', padx=(5,0))
+        ttk.Button(button_frame, text="Cancel", command=notes_window.destroy).pack(side='right')
+        
+        # Focus on text area
+        notes_text.focus_set()
+    
+    def remove_dataset(self):
+        """Remove the active dataset."""
+        active_dataset = self.dataset_manager.get_active_dataset()
+        if not active_dataset:
+            return
+        
+        # Confirm removal
+        result = messagebox.askyesno(
+            "Remove Dataset",
+            f"Are you sure you want to remove dataset '{active_dataset['tag']}'?\n\nThis action cannot be undone."
+        )
+        
+        if result:
+            self.dataset_manager.remove_dataset(active_dataset['id'])
+            
+            # Update UI
+            self._update_dataset_ui()
+            
+            # Load new active dataset if available
+            if self.dataset_manager.has_datasets():
+                self._load_active_dataset_settings()
+                self._update_column_combos()
+                self._update_stats_display()
+                
+                # Update plot if one exists
+                if hasattr(self, 'canvas'):
+                    self._update_plot()
+            else:
+                # No datasets left
+                self._clear_ui_for_no_datasets()
+    
+    def _clear_ui_for_no_datasets(self):
+        """Clear UI elements when no datasets are available."""
+        # Clear column combos
+        self.size_combo['values'] = []
+        self.frequency_combo['values'] = []
+        self.size_column_var.set('')
+        self.frequency_column_var.set('')
+        
+        # Clear stats
+        self.stats_text.delete(1.0, tk.END)
+        self.stats_text.insert(1.0, "No datasets loaded")
+        
+        # Disable plot button
+        self.plot_button.config(state='disabled')
+        self._update_report_button_state()
+        
+        # Clear plot if exists
+        if hasattr(self, 'canvas'):
+            for widget in self.plot_frame.winfo_children():
+                widget.destroy()
+            if self.current_figure:
+                plt.close(self.current_figure)
+                self.current_figure = None
+    
+    def _load_active_dataset_settings(self):
+        """Load settings from the active dataset."""
+        active_dataset = self.dataset_manager.get_active_dataset()
+        if not active_dataset:
+            return
+        
+        settings = active_dataset['analysis_settings']
+        
+        # Load settings into UI variables
+        self.data_mode_var.set(settings['data_mode'])
+        self.bin_count_var.set(settings['bin_count'])
+        self.size_column_var.set(settings['size_column'] or '')
+        self.frequency_column_var.set(settings['frequency_column'] or '')
+        self.show_stats_lines_var.set(settings['show_stats_lines'])
+        
+        # Update data processor mode
+        data_processor = active_dataset['data_processor']
+        data_processor.set_data_mode(settings['data_mode'])
+        
+        # Update UI elements
+        self._update_data_mode_ui()
+    
+    def _save_active_dataset_settings(self):
+        """Save current UI settings to the active dataset."""
+        active_dataset = self.dataset_manager.get_active_dataset()
+        if not active_dataset:
+            return
+        
+        settings = {
+            'data_mode': self.data_mode_var.get(),
+            'bin_count': self.bin_count_var.get(),
+            'size_column': self.size_column_var.get(),
+            'frequency_column': self.frequency_column_var.get(),
+            'show_stats_lines': self.show_stats_lines_var.get()
+        }
+        
+        self.dataset_manager.update_analysis_settings(active_dataset['id'], settings)
+    
+    # === EXISTING METHODS (Updated for Dataset Manager) ===
+    
     def _on_data_mode_change(self):
         """Handle data mode change (pre-aggregated vs raw measurements)."""
+        active_dataset = self.dataset_manager.get_active_dataset()
+        if not active_dataset:
+            return
+        
         mode = self.data_mode_var.get()
         
         # Update data processor
-        self.data_processor.set_data_mode(mode)
+        active_dataset['data_processor'].set_data_mode(mode)
         
         # Update UI
         self._update_data_mode_ui()
+        
+        # Save settings
+        self._save_active_dataset_settings()
         
         # Update stats display
         self._update_stats_display()
         
         # If we have a current plot, update it
-        if hasattr(self, 'canvas') and self.data_processor.data is not None:
+        if hasattr(self, 'canvas') and active_dataset:
+            self._update_plot()
+    
+    def _on_column_change(self, event=None):
+        """Handle column selection changes."""
+        active_dataset = self.dataset_manager.get_active_dataset()
+        if not active_dataset:
+            return
+        
+        # Update data processor with new column selections
+        mode = self.data_mode_var.get()
+        if mode == 'pre_aggregated':
+            active_dataset['data_processor'].set_columns(
+                self.size_column_var.get(),
+                self.frequency_column_var.get()
+            )
+        else:  # raw_measurements
+            active_dataset['data_processor'].set_columns(
+                self.size_column_var.get()
+            )
+        
+        # Save settings
+        self._save_active_dataset_settings()
+        
+        # Update stats
+        self._update_stats_display()
+        
+        # Update plot if one exists
+        if hasattr(self, 'canvas'):
             self._update_plot()
     
     def _update_report_button_state(self):
@@ -477,6 +937,11 @@ class MainWindow:
             messagebox.showerror("Error", "Please create a plot first before generating a report.")
             return
         
+        active_dataset = self.dataset_manager.get_active_dataset()
+        if not active_dataset:
+            messagebox.showerror("Error", "No active dataset for report generation.")
+            return
+        
         # Get save location from user
         file_path = filedialog.asksaveasfilename(
             title="Save Report As",
@@ -489,7 +954,7 @@ class MainWindow:
         
         try:
             # Collect current analysis data
-            data_stats = self.data_processor.get_data_stats()
+            data_stats = active_dataset['data_processor'].get_data_stats()
             
             # Collect analysis parameters
             analysis_params = {
@@ -497,13 +962,15 @@ class MainWindow:
                 'bin_count': self.bin_count_var.get(),
                 'size_column': self.size_column_var.get(),
                 'frequency_column': self.frequency_column_var.get(),
-                'skip_rows': self.skip_rows_var.get(),
+                'skip_rows': active_dataset['skip_rows'],
                 'show_stats_lines': self.show_stats_lines_var.get()
             }
             
-            # File information (if available)
+            # File information
             file_info = {
-                'filename': getattr(self, '_current_filename', 'Generated Data'),
+                'filename': active_dataset['filename'],
+                'dataset_tag': active_dataset['tag'],
+                'dataset_notes': active_dataset['notes'],
                 'generated_at': self._get_current_timestamp()
             }
             
@@ -546,24 +1013,40 @@ class MainWindow:
     
     def _update_column_combos(self):
         """Update the column selection comboboxes."""
-        columns = self.data_processor.get_columns()
+        active_dataset = self.dataset_manager.get_active_dataset()
+        if not active_dataset:
+            self.size_combo['values'] = []
+            self.frequency_combo['values'] = []
+            return
+        
+        columns = active_dataset['data_processor'].get_columns()
         
         self.size_combo['values'] = columns
         self.frequency_combo['values'] = columns
         
         # Set default selections if auto-detected
-        if self.data_processor.size_column:
-            self.size_column_var.set(self.data_processor.size_column)
-        if self.data_processor.frequency_column:
-            self.frequency_column_var.set(self.data_processor.frequency_column)
+        data_processor = active_dataset['data_processor']
+        if data_processor.size_column:
+            self.size_column_var.set(data_processor.size_column)
+        if data_processor.frequency_column:
+            self.frequency_column_var.set(data_processor.frequency_column)
     
     def _update_stats_display(self):
         """Update the statistics display."""
-        stats = self.data_processor.get_data_stats()
+        active_dataset = self.dataset_manager.get_active_dataset()
+        if not active_dataset:
+            self.stats_text.delete(1.0, tk.END)
+            self.stats_text.insert(1.0, "No active dataset")
+            return
+        
+        stats = active_dataset['data_processor'].get_data_stats()
         
         self.stats_text.delete(1.0, tk.END)
         
-        stats_str = f"Rows: {stats.get('total_rows', 'N/A')}\n"
+        # Dataset info
+        stats_str = f"Dataset: {active_dataset['tag']}\n"
+        stats_str += f"File: {active_dataset['filename']}\n"
+        stats_str += f"Rows: {stats.get('total_rows', 'N/A')}\n"
         stats_str += f"Columns: {stats.get('total_columns', 'N/A')}\n"
         stats_str += f"Mode: {stats.get('data_mode', 'N/A')}\n"
         
@@ -607,8 +1090,11 @@ class MainWindow:
             bin_count = MAX_BIN_COUNT  
             self.bin_count_var.set(bin_count)
         
+        # Save settings
+        self._save_active_dataset_settings()
+        
         # Update plot if we have data
-        if hasattr(self, 'canvas') and self.data_processor.data is not None:
+        if hasattr(self, 'canvas') and self.dataset_manager.get_active_dataset():
             self._update_plot()
     
     def _on_bin_entry_change(self, event):
@@ -624,8 +1110,11 @@ class MainWindow:
                 bin_count = MAX_BIN_COUNT
                 self.bin_count_var.set(bin_count)
             
+            # Save settings
+            self._save_active_dataset_settings()
+            
             # Update plot if we have data
-            if hasattr(self, 'canvas') and self.data_processor.data is not None:
+            if hasattr(self, 'canvas') and self.dataset_manager.get_active_dataset():
                 self._update_plot()
                 
         except (ValueError, tk.TclError):
@@ -634,37 +1123,51 @@ class MainWindow:
     
     def _on_stats_toggle(self):
         """Handle statistical lines toggle change."""
+        # Save settings
+        self._save_active_dataset_settings()
+        
         # If we have a current plot, update it
-        if hasattr(self, 'canvas') and self.data_processor.data is not None:
+        if hasattr(self, 'canvas') and self.dataset_manager.get_active_dataset():
             self._update_plot()
     
     def create_plot(self):
         """Create and display the histogram plot."""
+        active_dataset = self.dataset_manager.get_active_dataset()
+        if not active_dataset:
+            messagebox.showerror("Error", "No active dataset to plot.")
+            return
+        
+        data_processor = active_dataset['data_processor']
+        
         # Update data processor with current settings
         mode = self.data_mode_var.get()
-        self.data_processor.set_data_mode(mode)
+        data_processor.set_data_mode(mode)
         
         # Update column selections
         if mode == 'pre_aggregated':
-            self.data_processor.set_columns(
+            data_processor.set_columns(
                 self.size_column_var.get(),
                 self.frequency_column_var.get()
             )
         else:  # raw_measurements
-            self.data_processor.set_columns(
+            data_processor.set_columns(
                 self.size_column_var.get()
             )
         
-        size_data = self.data_processor.get_size_data()
-        frequency_data = self.data_processor.get_frequency_data()
+        size_data = data_processor.get_size_data()
+        frequency_data = data_processor.get_frequency_data()
         
         if size_data is None:
             messagebox.showerror("Error", "Please select a valid size column.")
             return
         
+        # Create plot title with dataset info
+        plot_title = f"Particle Size Distribution - {active_dataset['tag']}"
+        
         # Create the plot
         figure = self.plotter.create_histogram(
             size_data, frequency_data, self.bin_count_var.get(),
+            title=plot_title,
             show_stats_lines=self.show_stats_lines_var.get(),
             data_mode=mode
         )
@@ -673,6 +1176,9 @@ class MainWindow:
             self.current_figure = figure  # Store reference to current figure
             self._display_plot(figure)
             self._update_report_button_state()  # Enable report button when plot is created
+            
+            # Save settings
+            self._save_active_dataset_settings()
         else:
             messagebox.showerror("Error", "Failed to create plot.")
     
@@ -681,16 +1187,21 @@ class MainWindow:
         if not hasattr(self, 'canvas'):
             return
         
-        size_data = self.data_processor.get_size_data()
-        frequency_data = self.data_processor.get_frequency_data()
+        active_dataset = self.dataset_manager.get_active_dataset()
+        if not active_dataset:
+            return
+        
+        data_processor = active_dataset['data_processor']
+        size_data = data_processor.get_size_data()
+        frequency_data = data_processor.get_frequency_data()
         
         if size_data is not None:
-            # For updates, just recreate the entire plot display
-            # This is more reliable than trying to swap figures
             mode = self.data_mode_var.get()
+            plot_title = f"Particle Size Distribution - {active_dataset['tag']}"
             
             figure = self.plotter.create_histogram(
                 size_data, frequency_data, self.bin_count_var.get(),
+                title=plot_title,
                 show_stats_lines=self.show_stats_lines_var.get(),
                 data_mode=mode
             )
