@@ -12,6 +12,7 @@ from core.data_processor import ParticleDataProcessor
 from core.dataset_manager import DatasetManager
 from core.plotter import ParticlePlotter
 from config.constants import SUPPORTED_FILE_TYPES, MIN_BIN_COUNT, MAX_BIN_COUNT, DEFAULT_BIN_COUNT, RANDOM_DATA_BOUNDS
+from core.file_queue import FileQueue
 
 # Try to import report generation (now required dependency)
 try:
@@ -36,6 +37,7 @@ class MainWindow:
         # Initialize core components
         self.dataset_manager = DatasetManager()
         self.plotter = ParticlePlotter()
+        self.file_queue = FileQueue()
         
         # GUI variables
         self.bin_count_var = tk.IntVar(value=DEFAULT_BIN_COUNT)
@@ -71,23 +73,37 @@ class MainWindow:
         # Control frame (left side)
         self.control_frame = ttk.LabelFrame(self.main_frame, text="Controls", padding=10)
         
-        # === FILE LOADING CONTROLS ===
+        # === FILE LOADING CONTROLS === (UPDATED WITH MULTI-FILE SUPPORT)
         ttk.Label(self.control_frame, text="Data File:").grid(row=0, column=0, sticky='w', pady=2)
         
         file_frame = ttk.Frame(self.control_frame)
         file_frame.grid(row=0, column=1, columnspan=2, sticky='ew', pady=2)
         
+        # Single file loading
         self.load_button = ttk.Button(file_frame, text="Load CSV", command=self.load_file)
         self.load_button.grid(row=0, column=0, sticky='ew', padx=(0,5))
         
+        # NEW: Multiple file loading
+        self.load_multiple_button = ttk.Button(file_frame, text="Load Multiple", command=self.load_multiple_files)
+        self.load_multiple_button.grid(row=0, column=1, sticky='ew', padx=(0,5))
+        
         self.preview_button = ttk.Button(file_frame, text="Preview", command=self.preview_file)
-        self.preview_button.grid(row=0, column=1)
+        self.preview_button.grid(row=0, column=2)
         
+        # Configure file frame columns
         file_frame.columnconfigure(0, weight=1)
+        file_frame.columnconfigure(1, weight=1)
         
-        # File filtering options
+        # NEW: Queue status display
+        self.queue_status_frame = ttk.Frame(self.control_frame)
+        self.queue_status_frame.grid(row=1, column=0, columnspan=3, sticky='ew', pady=2)
+        
+        self.queue_status_label = ttk.Label(self.queue_status_frame, text="", font=('TkDefaultFont', 8))
+        self.queue_status_label.pack(anchor='w')
+        
+        # File filtering options (row updated from 1 to 2)
         filter_frame = ttk.Frame(self.control_frame)
-        filter_frame.grid(row=1, column=0, columnspan=3, sticky='ew', pady=2)
+        filter_frame.grid(row=2, column=0, columnspan=3, sticky='ew', pady=2)
         
         ttk.Label(filter_frame, text="Skip rows:").grid(row=0, column=0, sticky='w')
         self.skip_rows_entry = ttk.Entry(filter_frame, textvariable=self.skip_rows_var, width=6)
@@ -95,14 +111,14 @@ class MainWindow:
         
         ttk.Label(filter_frame, text="(header rows, metadata, etc.)").grid(row=0, column=2, sticky='w', padx=(5,0))
         
-        # === RANDOM DATA GENERATION ===
-        ttk.Separator(self.control_frame, orient='horizontal').grid(row=2, column=0, columnspan=3, sticky='ew', pady=5)
+        # === RANDOM DATA GENERATION === (row updated from 2 to 3)
+        ttk.Separator(self.control_frame, orient='horizontal').grid(row=3, column=0, columnspan=3, sticky='ew', pady=5)
         
-        ttk.Label(self.control_frame, text="Generate Random Data:").grid(row=3, column=0, sticky='w', pady=2)
+        ttk.Label(self.control_frame, text="Generate Random Data:").grid(row=4, column=0, sticky='w', pady=2)
         
-        # Random data controls frame
+        # Random data controls frame (row updated from 4 to 5)
         random_frame = ttk.Frame(self.control_frame)
-        random_frame.grid(row=4, column=0, columnspan=3, sticky='ew', pady=2)
+        random_frame.grid(row=5, column=0, columnspan=3, sticky='ew', pady=2)
         
         ttk.Label(random_frame, text="Points:").grid(row=0, column=0, sticky='w')
         self.random_count_entry = ttk.Entry(random_frame, textvariable=self.random_count_var, width=8)
@@ -110,56 +126,56 @@ class MainWindow:
         
         ttk.Label(random_frame, text="Distribution:").grid(row=0, column=2, sticky='w', padx=(10,0))
         self.distribution_combo = ttk.Combobox(random_frame, textvariable=self.distribution_var, 
-                                             values=['lognormal', 'normal', 'uniform'], 
-                                             state='readonly', width=10)
+                                            values=['lognormal', 'normal', 'uniform'], 
+                                            state='readonly', width=10)
         self.distribution_combo.grid(row=0, column=3, padx=5)
         
         self.generate_button = ttk.Button(random_frame, text="Generate", command=self.generate_random_data)
         self.generate_button.grid(row=0, column=4, padx=5)
         
-        # === DATA ANALYSIS CONTROLS ===
-        ttk.Separator(self.control_frame, orient='horizontal').grid(row=5, column=0, columnspan=3, sticky='ew', pady=5)
+        # === DATA ANALYSIS CONTROLS === (row updated from 5 to 6)
+        ttk.Separator(self.control_frame, orient='horizontal').grid(row=6, column=0, columnspan=3, sticky='ew', pady=5)
         
-        # Data mode selection
-        ttk.Label(self.control_frame, text="Data Type:").grid(row=6, column=0, sticky='w', pady=2)
+        # Data mode selection (row updated from 6 to 7)
+        ttk.Label(self.control_frame, text="Data Type:").grid(row=7, column=0, sticky='w', pady=2)
         
         data_mode_frame = ttk.Frame(self.control_frame)
-        data_mode_frame.grid(row=6, column=1, columnspan=2, sticky='ew', pady=2)
+        data_mode_frame.grid(row=7, column=1, columnspan=2, sticky='ew', pady=2)
         
         self.pre_agg_radio = ttk.Radiobutton(data_mode_frame, text="Pre-aggregated (Size + Frequency)", 
-                                           variable=self.data_mode_var, value='pre_aggregated',
-                                           command=self._on_data_mode_change)
+                                        variable=self.data_mode_var, value='pre_aggregated',
+                                        command=self._on_data_mode_change)
         self.pre_agg_radio.grid(row=0, column=0, sticky='w')
         
         self.raw_radio = ttk.Radiobutton(data_mode_frame, text="Raw Measurements (Size only)", 
-                                       variable=self.data_mode_var, value='raw_measurements',
-                                       command=self._on_data_mode_change)
+                                    variable=self.data_mode_var, value='raw_measurements',
+                                    command=self._on_data_mode_change)
         self.raw_radio.grid(row=1, column=0, sticky='w')
         
-        # Column selection
-        ttk.Label(self.control_frame, text="Size Column:").grid(row=7, column=0, sticky='w', pady=2)
+        # Column selection (rows updated from 7,8 to 8,9)
+        ttk.Label(self.control_frame, text="Size Column:").grid(row=8, column=0, sticky='w', pady=2)
         self.size_combo = ttk.Combobox(self.control_frame, textvariable=self.size_column_var, 
-                                      state='readonly')
-        self.size_combo.grid(row=7, column=1, sticky='ew', pady=2)
+                                    state='readonly')
+        self.size_combo.grid(row=8, column=1, sticky='ew', pady=2)
         self.size_combo.bind('<<ComboboxSelected>>', self._on_column_change)
         
         self.frequency_label = ttk.Label(self.control_frame, text="Frequency Column:")
-        self.frequency_label.grid(row=8, column=0, sticky='w', pady=2)
+        self.frequency_label.grid(row=9, column=0, sticky='w', pady=2)
         self.frequency_combo = ttk.Combobox(self.control_frame, textvariable=self.frequency_column_var, 
-                                           state='readonly')
-        self.frequency_combo.grid(row=8, column=1, sticky='ew', pady=2)
+                                        state='readonly')
+        self.frequency_combo.grid(row=9, column=1, sticky='ew', pady=2)
         self.frequency_combo.bind('<<ComboboxSelected>>', self._on_column_change)
         
-        # Bin count control
-        ttk.Label(self.control_frame, text="Bins:").grid(row=9, column=0, sticky='w', pady=2)
+        # Bin count control (row updated from 9 to 10)
+        ttk.Label(self.control_frame, text="Bins:").grid(row=10, column=0, sticky='w', pady=2)
         
         # Create frame for bin controls
         bin_frame = ttk.Frame(self.control_frame)
-        bin_frame.grid(row=9, column=1, columnspan=2, sticky='ew', pady=2)
+        bin_frame.grid(row=10, column=1, columnspan=2, sticky='ew', pady=2)
         
         # Bin count slider
         self.bin_scale = ttk.Scale(bin_frame, from_=MIN_BIN_COUNT, to=MAX_BIN_COUNT, 
-                                  variable=self.bin_count_var, orient='horizontal')
+                                variable=self.bin_count_var, orient='horizontal')
         self.bin_scale.grid(row=0, column=0, sticky='ew', padx=(0,5))
         
         # Configure scale to use integer values only
@@ -177,44 +193,44 @@ class MainWindow:
         # Configure bin frame column weights
         bin_frame.columnconfigure(0, weight=1)
         
-        # Statistical lines toggle
+        # Statistical lines toggle (row updated from 10 to 11)
         self.stats_lines_check = ttk.Checkbutton(self.control_frame, 
                                                 text="Show Mean & Std Dev Lines", 
                                                 variable=self.show_stats_lines_var,
                                                 command=self._on_stats_toggle)
-        self.stats_lines_check.grid(row=10, column=0, columnspan=2, sticky='w', pady=2)
+        self.stats_lines_check.grid(row=11, column=0, columnspan=2, sticky='w', pady=2)
         
-        # Plot button
+        # Plot button (row updated from 11 to 12)
         self.plot_button = ttk.Button(self.control_frame, text="Create Plot", 
-                                     command=self.create_plot, state='disabled')
-        self.plot_button.grid(row=11, column=0, columnspan=2, sticky='ew', pady=10)
+                                    command=self.create_plot, state='disabled')
+        self.plot_button.grid(row=12, column=0, columnspan=2, sticky='ew', pady=10)
         
-        # Report generation button
+        # Report generation button (row updated from 12 to 13)
         self.report_button = ttk.Button(self.control_frame, text="Generate Report", 
-                                       command=self.generate_report, state='disabled')
-        self.report_button.grid(row=12, column=0, columnspan=2, sticky='ew', pady=5)
+                                    command=self.generate_report, state='disabled')
+        self.report_button.grid(row=13, column=0, columnspan=2, sticky='ew', pady=5)
         
         # Show/hide report button based on availability
         if not REPORTS_AVAILABLE:
             self.report_button.config(state='disabled', text="Generate Report (ReportLab not installed)")
         
-        # === DATASET MANAGEMENT CONTROLS ===
-        ttk.Separator(self.control_frame, orient='horizontal').grid(row=13, column=0, columnspan=3, sticky='ew', pady=10)
+        # === DATASET MANAGEMENT CONTROLS === (row updated from 13 to 14)
+        ttk.Separator(self.control_frame, orient='horizontal').grid(row=14, column=0, columnspan=3, sticky='ew', pady=10)
         
-        # Dataset management frame
+        # Dataset management frame (row updated from 14 to 15)
         self.dataset_mgmt_frame = ttk.LabelFrame(self.control_frame, text="Dataset Management", padding=5)
-        self.dataset_mgmt_frame.grid(row=14, column=0, columnspan=3, sticky='ew', pady=5)
+        self.dataset_mgmt_frame.grid(row=15, column=0, columnspan=3, sticky='ew', pady=5)
         
         # Dataset navigation
         nav_frame = ttk.Frame(self.dataset_mgmt_frame)
         nav_frame.pack(fill='x', pady=5)
         
         self.prev_dataset_btn = ttk.Button(nav_frame, text="◀ Previous", 
-                                          command=self.previous_dataset, state='disabled')
+                                        command=self.previous_dataset, state='disabled')
         self.prev_dataset_btn.pack(side='left', padx=(0,5))
         
         self.next_dataset_btn = ttk.Button(nav_frame, text="Next ▶", 
-                                          command=self.next_dataset, state='disabled')
+                                        command=self.next_dataset, state='disabled')
         self.next_dataset_btn.pack(side='left')
         
         # Dataset info display
@@ -222,7 +238,7 @@ class MainWindow:
         self.dataset_info_frame.pack(fill='x', pady=5)
         
         self.dataset_info_label = ttk.Label(self.dataset_info_frame, text="No datasets loaded", 
-                                           font=('TkDefaultFont', 9, 'bold'))
+                                        font=('TkDefaultFont', 9, 'bold'))
         self.dataset_info_label.pack(anchor='w')
         
         # Dataset actions
@@ -230,7 +246,7 @@ class MainWindow:
         actions_frame.pack(fill='x', pady=5)
         
         self.edit_tag_btn = ttk.Button(actions_frame, text="Edit Tag", 
-                                      command=self.edit_dataset_tag, state='disabled')
+                                    command=self.edit_dataset_tag, state='disabled')
         self.edit_tag_btn.pack(side='left', padx=(0,5))
         
         self.edit_notes_btn = ttk.Button(actions_frame, text="Edit Notes", 
@@ -241,9 +257,9 @@ class MainWindow:
                                             command=self.remove_dataset, state='disabled')
         self.remove_dataset_btn.pack(side='left')
         
-        # Stats display
+        # Stats display (row updated from 15 to 16)
         self.stats_frame = ttk.LabelFrame(self.control_frame, text="Data Info", padding=5)
-        self.stats_frame.grid(row=15, column=0, columnspan=3, sticky='ew', pady=5)
+        self.stats_frame.grid(row=16, column=0, columnspan=3, sticky='ew', pady=5)
         
         self.stats_text = tk.Text(self.stats_frame, height=8, width=30)
         self.stats_text.pack(fill='both', expand=True)
@@ -1261,3 +1277,363 @@ class MainWindow:
             # Force exit if cleanup fails
             import sys
             sys.exit(0)
+
+    def load_multiple_files(self):
+        """Load multiple CSV files using file queue system."""
+        file_paths = filedialog.askopenfilenames(
+            title="Select CSV files",
+            filetypes=SUPPORTED_FILE_TYPES
+        )
+        
+        if file_paths:
+            # Clear any existing queue
+            self.file_queue.clear_queue()
+            
+            # Add files to queue
+            added_count = self.file_queue.add_files(list(file_paths))
+            
+            if added_count > 0:
+                self._update_queue_status()
+                messagebox.showinfo("Files Selected", 
+                                f"Added {added_count} files to processing queue.\n"
+                                f"Click 'Process Queue' to begin loading with preview.")
+                
+                # Start the queue processing workflow
+                self._start_queue_processing()
+            else:
+                messagebox.showerror("Error", "No valid files were added to the queue.")
+
+    def _start_queue_processing(self):
+        """Start the queue processing workflow."""
+        if not self.file_queue.has_more_files():
+            messagebox.showinfo("Queue Complete", "No files to process.")
+            return
+        
+        # Process the first file
+        self._process_current_queue_file()
+
+    def _process_current_queue_file(self):
+        """Process the current file in the queue."""
+        current_file = self.file_queue.get_current_file()
+        
+        if not current_file:
+            # Queue is complete
+            self._finish_queue_processing()
+            return
+        
+        self._update_queue_status()
+        
+        # Show enhanced preview for current file
+        self._show_queue_preview_dialog(current_file)
+
+    def _show_queue_preview_dialog(self, file_info):
+        """Show preview dialog for current file in queue."""
+        file_path = file_info['file_path']
+        
+        # Try to preview the file
+        temp_processor = ParticleDataProcessor()
+        preview_data = temp_processor.preview_csv(file_path, preview_rows=15)
+        
+        if not preview_data['success']:
+            # Can't preview - skip this file
+            error_msg = f"Cannot preview file: {preview_data.get('error', 'Unknown error')}"
+            self.file_queue.mark_current_failed(error_msg)
+            
+            # Ask user if they want to continue
+            result = messagebox.askyesno(
+                "Preview Failed", 
+                f"Failed to preview {file_info['filename']}:\n{error_msg}\n\n"
+                f"Skip this file and continue with queue?"
+            )
+            
+            if result:
+                self._process_current_queue_file()  # Process next file
+            else:
+                self._cancel_queue_processing()
+            return
+        
+        # Show the enhanced preview dialog
+        self._show_enhanced_queue_preview_dialog(preview_data, file_info)
+
+    def _show_enhanced_queue_preview_dialog(self, preview_data, file_info):
+        """Show enhanced preview dialog for queue processing."""
+        preview_window = tk.Toplevel(self.root)
+        preview_window.title(f"Queue Preview - {file_info['filename']}")
+        preview_window.geometry("950x800")
+        preview_window.grab_set()  # Make it modal
+        
+        # Queue progress header
+        queue_info = self.file_queue.get_current_file_info()
+        progress_frame = ttk.LabelFrame(preview_window, text="Queue Progress", padding=5)
+        progress_frame.pack(fill='x', padx=10, pady=5)
+        
+        progress_text = f"File {queue_info['current_index'] + 1} of {queue_info['total_files']}"
+        if queue_info['processed_count'] > 0:
+            progress_text += f" | Processed: {queue_info['processed_count']}"
+        if queue_info['failed_count'] > 0:
+            progress_text += f" | Failed: {queue_info['failed_count']}"
+        if queue_info['skipped_count'] > 0:
+            progress_text += f" | Skipped: {queue_info['skipped_count']}"
+        
+        ttk.Label(progress_frame, text=progress_text, font=('TkDefaultFont', 10, 'bold')).pack(anchor='w')
+        
+        # File info header
+        info_frame = ttk.LabelFrame(preview_window, text="Current File Information", padding=5)
+        info_frame.pack(fill='x', padx=10, pady=5)
+        
+        ttk.Label(info_frame, text=f"File: {file_info['filename']}", font=('TkDefaultFont', 9, 'bold')).pack(anchor='w')
+        ttk.Label(info_frame, text=f"Auto Tag: {file_info['auto_tag']}").pack(anchor='w')
+        ttk.Label(info_frame, text=f"Total lines: {preview_data['total_lines']}").pack(anchor='w')
+        ttk.Label(info_frame, text=f"Detected columns: {preview_data['detected_columns']}").pack(anchor='w')
+        
+        # Tag editing
+        tag_frame = ttk.Frame(info_frame)
+        tag_frame.pack(fill='x', pady=5)
+        
+        ttk.Label(tag_frame, text="Dataset Tag:").grid(row=0, column=0, sticky='w', padx=(0,5))
+        tag_var = tk.StringVar(value=file_info['auto_tag'])
+        tag_entry = ttk.Entry(tag_frame, textvariable=tag_var, width=30)
+        tag_entry.grid(row=0, column=1, sticky='ew', padx=5)
+        tag_frame.columnconfigure(1, weight=1)
+        
+        # Preview controls section (similar to existing preview dialog)
+        preview_control_frame = ttk.LabelFrame(preview_window, text="Preview Controls", padding=5)
+        preview_control_frame.pack(fill='x', padx=10, pady=5)
+        
+        controls_row = ttk.Frame(preview_control_frame)
+        controls_row.pack(fill='x')
+        
+        ttk.Label(controls_row, text="Preview lines:").grid(row=0, column=0, sticky='w', padx=(0,5))
+        preview_lines_var = tk.IntVar(value=15)
+        preview_lines_entry = ttk.Entry(controls_row, textvariable=preview_lines_var, width=8)
+        preview_lines_entry.grid(row=0, column=1, padx=5)
+        
+        def refresh_preview():
+            try:
+                num_lines = preview_lines_var.get()
+                if num_lines < 1:
+                    num_lines = 1
+                    preview_lines_var.set(1)
+                elif num_lines > 1000:
+                    num_lines = 1000
+                    preview_lines_var.set(1000)
+                
+                temp_processor = ParticleDataProcessor()
+                new_preview_data = temp_processor.preview_csv(file_info['file_path'], preview_rows=num_lines)
+                
+                if new_preview_data['success']:
+                    preview_text.config(state='normal')
+                    preview_text.delete(1.0, tk.END)
+                    
+                    for i, line in enumerate(new_preview_data['preview_lines']):
+                        preview_text.insert(tk.END, f"{i:3d}: {line}\n")
+                    
+                    preview_text.config(state='disabled')
+                    status_label.config(text=f"✓ Showing first {len(new_preview_data['preview_lines'])} lines")
+                else:
+                    messagebox.showerror("Preview Error", f"Failed to refresh preview:\n{new_preview_data['error']}")
+                    
+            except tk.TclError:
+                messagebox.showerror("Error", "Please enter a valid number of lines to preview.")
+        
+        refresh_button = ttk.Button(controls_row, text="🔄 Refresh Preview", command=refresh_preview)
+        refresh_button.grid(row=0, column=2, padx=10)
+        
+        status_label = ttk.Label(controls_row, text=f"✓ Showing first {len(preview_data['preview_lines'])} lines", 
+                            foreground='green', font=('TkDefaultFont', 8))
+        status_label.grid(row=0, column=3, sticky='w', padx=(20,0))
+        
+        # Preview text section
+        preview_section = ttk.LabelFrame(preview_window, text="File Preview", padding=5)
+        preview_section.pack(fill='both', expand=True, padx=10, pady=5)
+        
+        text_frame = ttk.Frame(preview_section)
+        text_frame.pack(fill='both', expand=True)
+        
+        preview_text = tk.Text(text_frame, wrap='none', font=('Courier', 9))
+        scrollbar_y = ttk.Scrollbar(text_frame, orient='vertical', command=preview_text.yview)
+        scrollbar_x = ttk.Scrollbar(text_frame, orient='horizontal', command=preview_text.xview)
+        
+        preview_text.configure(yscrollcommand=scrollbar_y.set, xscrollcommand=scrollbar_x.set)
+        
+        preview_text.grid(row=0, column=0, sticky='nsew')
+        scrollbar_y.grid(row=0, column=1, sticky='ns')
+        scrollbar_x.grid(row=1, column=0, sticky='ew')
+        
+        text_frame.grid_rowconfigure(0, weight=1)
+        text_frame.grid_columnconfigure(0, weight=1)
+        
+        # Add initial preview content
+        for i, line in enumerate(preview_data['preview_lines']):
+            preview_text.insert(tk.END, f"{i:3d}: {line}\n")
+        
+        preview_text.config(state='disabled')
+        
+        # Filter controls section
+        filter_frame = ttk.LabelFrame(preview_window, text="Data Filtering Options", padding=10)
+        filter_frame.pack(fill='x', padx=10, pady=5)
+        
+        filter_row = ttk.Frame(filter_frame)
+        filter_row.pack(fill='x')
+        
+        ttk.Label(filter_row, text="Skip rows from top:").grid(row=0, column=0, sticky='w')
+        skip_var = tk.IntVar(value=file_info['skip_rows'])
+        skip_entry = ttk.Entry(filter_row, textvariable=skip_var, width=6)
+        skip_entry.grid(row=0, column=1, padx=10)
+        
+        ttk.Label(filter_row, text="(Use this to skip headers, metadata, or junk data)", 
+                font=('TkDefaultFont', 8)).grid(row=0, column=2, sticky='w', padx=(10,0))
+        
+        # Buttons section
+        button_frame = ttk.Frame(preview_window)
+        button_frame.pack(fill='x', padx=10, pady=10)
+        
+        def load_current_file():
+            """Load the current file with specified settings."""
+            try:
+                skip_rows = skip_var.get()
+                if skip_rows < 0:
+                    skip_rows = 0
+                
+                dataset_tag = tag_var.get().strip() or file_info['auto_tag']
+                
+                # Update file queue with settings
+                self.file_queue.update_current_file(
+                    skip_rows=skip_rows,
+                    auto_tag=dataset_tag
+                )
+                
+                preview_window.destroy()
+                
+                # Attempt to load the file
+                self._load_current_queue_file(file_info['file_path'], dataset_tag, skip_rows)
+                
+            except tk.TclError:
+                messagebox.showerror("Error", "Please enter a valid number for rows to skip.")
+        
+        def skip_current_file():
+            """Skip the current file and move to next."""
+            self.file_queue.skip_current_file("User skipped during preview")
+            preview_window.destroy()
+            self._process_current_queue_file()  # Process next file
+        
+        def cancel_queue():
+            """Cancel the entire queue processing."""
+            preview_window.destroy()
+            self._cancel_queue_processing()
+        
+        # Button layout
+        ttk.Button(button_frame, text="📁 Load This File", command=load_current_file).pack(side='left', padx=5)
+        ttk.Button(button_frame, text="⏭️ Skip This File", command=skip_current_file).pack(side='left', padx=5)
+        ttk.Button(button_frame, text="❌ Cancel Queue", command=cancel_queue).pack(side='left', padx=5)
+        
+        # Focus on tag entry for immediate editing
+        tag_entry.focus_set()
+        tag_entry.select_range(0, tk.END)
+
+    def _load_current_queue_file(self, file_path, dataset_tag, skip_rows):
+        """Load the current queue file as a dataset."""
+        try:
+            # Add dataset to manager
+            dataset_id = self.dataset_manager.add_dataset(
+                file_path=file_path,
+                tag=dataset_tag,
+                notes="",
+                skip_rows=skip_rows
+            )
+            
+            if dataset_id:
+                # Mark as successfully processed
+                self.file_queue.mark_current_processed(dataset_id)
+                
+                # Set as active dataset
+                self.dataset_manager.set_active_dataset(dataset_id)
+                
+                # Update UI
+                self._update_dataset_ui()
+                self._load_active_dataset_settings()
+                self._update_column_combos()
+                self._update_stats_display()
+                self.plot_button.config(state='normal')
+                self._update_report_button_state()
+                
+                logger.info(f"Successfully loaded queue file: {dataset_tag}")
+                
+                # Process next file in queue
+                self._process_current_queue_file()
+                
+            else:
+                # Mark as failed
+                self.file_queue.mark_current_failed("Failed to load file into dataset manager")
+                
+                # Ask user if they want to continue
+                result = messagebox.askyesno(
+                    "Load Failed", 
+                    f"Failed to load {dataset_tag}.\n\n"
+                    f"Continue with remaining files?"
+                )
+                
+                if result:
+                    self._process_current_queue_file()  # Process next file
+                else:
+                    self._cancel_queue_processing()
+                    
+        except Exception as e:
+            error_msg = f"Error loading file: {str(e)}"
+            self.file_queue.mark_current_failed(error_msg)
+            
+            result = messagebox.askyesno(
+                "Load Error", 
+                f"Error loading {dataset_tag}:\n{error_msg}\n\n"
+                f"Continue with remaining files?"
+            )
+            
+            if result:
+                self._process_current_queue_file()  # Process next file
+            else:
+                self._cancel_queue_processing()
+
+    def _finish_queue_processing(self):
+        """Finish queue processing and show summary."""
+        summary = self.file_queue.get_summary()
+        
+        summary_text = f"Queue Processing Complete!\n\n"
+        summary_text += f"Total files: {summary['total_files']}\n"
+        summary_text += f"Successfully loaded: {summary['processed']}\n"
+        summary_text += f"Failed: {summary['failed']}\n"
+        summary_text += f"Skipped: {summary['skipped']}\n"
+        summary_text += f"Success rate: {summary['success_rate']:.1f}%"
+        
+        messagebox.showinfo("Queue Complete", summary_text)
+        
+        # Clear queue status
+        self._update_queue_status()
+
+    def _cancel_queue_processing(self):
+        """Cancel queue processing."""
+        self.file_queue.clear_queue()
+        self._update_queue_status()
+        messagebox.showinfo("Cancelled", "Queue processing was cancelled.")
+
+    def _update_queue_status(self):
+        """Update the queue status display."""
+        if not self.file_queue.has_more_files() and len(self.file_queue.files) == 0:
+            # No queue active
+            self.queue_status_label.config(text="")
+            return
+        
+        info = self.file_queue.get_current_file_info()
+        
+        if info['is_complete']:
+            # Queue is complete
+            self.queue_status_label.config(text="Queue processing complete")
+        elif info['has_current_file']:
+            # Currently processing
+            current_file = self.file_queue.get_current_file()
+            status_text = f"Queue: {info['current_index'] + 1}/{info['total_files']} - {current_file['filename']}"
+            if info['processed_count'] > 0 or info['failed_count'] > 0 or info['skipped_count'] > 0:
+                status_text += f" (P:{info['processed_count']} F:{info['failed_count']} S:{info['skipped_count']})"
+            self.queue_status_label.config(text=status_text)
+        else:
+            # Queue exists but no current file
+            self.queue_status_label.config(text=f"Queue ready: {info['total_files']} files")
