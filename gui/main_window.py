@@ -7,12 +7,15 @@ from tkinter import ttk, filedialog, messagebox, simpledialog
 import logging
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 import matplotlib.pyplot as plt
+from pathlib import Path
 
 from core.data_processor import ParticleDataProcessor
 from core.dataset_manager import DatasetManager
 from core.plotter import ParticlePlotter
 from config.constants import SUPPORTED_FILE_TYPES, MIN_BIN_COUNT, MAX_BIN_COUNT, DEFAULT_BIN_COUNT, RANDOM_DATA_BOUNDS
 from core.file_queue import FileQueue
+from config.config_manager import ConfigurationManager
+from gui.config_viewer import ConfigurationViewerDialog
 
 # Try to import report generation (now required dependency)
 try:
@@ -48,7 +51,6 @@ class MainWindow:
         self.show_stats_lines_var = tk.BooleanVar(value=True)
         self.data_mode_var = tk.StringVar(value='pre_aggregated')
         self.skip_rows_var = tk.IntVar(value=0)
-        
         # NEW: Analysis mode selection variable (calibration vs verification)
         self.analysis_mode_var = tk.StringVar(value='calibration')
         
@@ -61,8 +63,17 @@ class MainWindow:
         else:
             self.report_template = None
         
+        
+        # Initialize configuration manager
+        self.config_manager = ConfigurationManager()
+        self.config_viewer = None
+        
+        # Load default configuration or any existing config
+        self._initialize_configuration()
+
         self._create_widgets()
         self._create_layout()
+        self._create_menu_bar() 
         
         # Initialize UI state
         self._update_data_mode_ui()
@@ -324,6 +335,8 @@ class MainWindow:
         
         # Configure column weights
         self.control_frame.columnconfigure(1, weight=1)
+
+        
     
     def _create_layout(self):
         """Arrange widgets in the window."""
@@ -1726,3 +1739,237 @@ class MainWindow:
             # Force exit if cleanup fails
             import sys
             sys.exit(0)
+            
+    def _initialize_configuration(self):
+        """Initialize configuration system and apply default settings."""
+        try:
+            # Try to load a default config file if it exists
+            default_config_path = "config/default_config.json"
+            if Path(default_config_path).exists():
+                success = self.config_manager.load_config(default_config_path)
+                if success:
+                    logger.info("Loaded default configuration")
+                    self._apply_config_settings()
+                else:
+                    logger.warning("Failed to load default configuration, using built-in defaults")
+            else:
+                logger.info("No default configuration file found, using built-in defaults")
+                
+        except Exception as e:
+            logger.error(f"Error initializing configuration: {e}")
+
+    def _apply_config_settings(self):
+        """Apply loaded configuration settings to the UI."""
+        try:
+            # Apply analysis defaults
+            analysis_defaults = self.config_manager.get_analysis_defaults()
+            
+            if 'default_bin_count' in analysis_defaults:
+                self.bin_count_var.set(analysis_defaults['default_bin_count'])
+                
+            if 'default_data_mode' in analysis_defaults:
+                self.data_mode_var.set(analysis_defaults['default_data_mode'])
+                
+            if 'default_analysis_mode' in analysis_defaults:
+                self.analysis_mode_var.set(analysis_defaults['default_analysis_mode'])
+                
+            if 'show_stats_lines' in analysis_defaults:
+                self.show_stats_lines_var.set(analysis_defaults['show_stats_lines'])
+            
+            # Apply UI defaults
+            ui_defaults = self.config_manager.get_ui_defaults()
+            
+            if 'default_skip_rows' in ui_defaults:
+                self.skip_rows_var.set(ui_defaults['default_skip_rows'])
+                
+            if 'window_geometry' in ui_defaults:
+                self.root.geometry(ui_defaults['window_geometry'])
+            
+            # Update column mappings for auto-detection
+            column_mappings = self.config_manager.get_column_mappings()
+            
+            # Apply to constants
+            if 'size_column_names' in column_mappings:
+                from config import constants
+                constants.SIZE_COLUMN_NAMES = column_mappings['size_column_names']
+                
+            if 'frequency_column_names' in column_mappings:
+                from config import constants
+                constants.FREQUENCY_COLUMN_NAMES = column_mappings['frequency_column_names']
+            
+            # Apply plot defaults
+            plot_defaults = self.config_manager.get_plot_defaults()
+            
+            # Update plot settings
+            if 'color_palette' in plot_defaults:
+                self.dataset_manager._color_palette = plot_defaults['color_palette']
+            
+            logger.info("Applied configuration settings to UI")
+            
+        except Exception as e:
+            logger.error(f"Error applying configuration settings: {e}")
+
+    def _create_menu_bar(self):
+        """Create the application menu bar."""
+        menubar = tk.Menu(self.root)
+        self.root.config(menu=menubar)
+        
+        # File menu
+        file_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="File", menu=file_menu)
+        
+        file_menu.add_command(label="Load CSV...", command=self.load_file)
+        file_menu.add_command(label="Load Multiple CSVs...", command=self.load_multiple_files)
+        file_menu.add_separator()
+        file_menu.add_command(label="Generate Report...", command=self.generate_report)
+        file_menu.add_separator()
+        file_menu.add_command(label="Exit", command=self._on_closing)
+        
+        # Configuration menu
+        config_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Configuration", menu=config_menu)
+        
+        config_menu.add_command(label="Configuration Manager...", command=self.show_config_manager)
+        config_menu.add_separator()
+        config_menu.add_command(label="Load Configuration...", command=self.load_config_file)
+        config_menu.add_command(label="Export Current Settings...", command=self.export_current_config)
+        config_menu.add_separator()
+        config_menu.add_command(label="Create Sample Config...", command=self._create_sample_config_from_menu)
+        
+        # Tools menu
+        tools_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Tools", menu=tools_menu)
+        
+        tools_menu.add_command(label="Preview CSV...", command=self.preview_file)
+        tools_menu.add_command(label="Generate Random Data...", command=self.generate_random_data)
+        
+        # Help menu
+        help_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Help", menu=help_menu)
+        
+        help_menu.add_command(label="About", command=self._show_about_dialog)
+
+    def show_config_manager(self):
+        """Show the configuration manager dialog."""
+        if not self.config_viewer:
+            self.config_viewer = ConfigurationViewerDialog(self.root, self.config_manager)
+        
+        self.config_viewer.show_dialog()
+
+    def export_current_config(self):
+        """Export current UI state as a configuration file."""
+        try:
+            # Collect current UI state
+            ui_state = {
+                "analysis_settings": {
+                    "default_bin_count": self.bin_count_var.get(),
+                    "default_data_mode": self.data_mode_var.get(),
+                    "default_analysis_mode": self.analysis_mode_var.get(),
+                    "show_stats_lines": self.show_stats_lines_var.get(),
+                    "auto_detect_columns": True
+                },
+                "ui_settings": {
+                    "window_geometry": self.root.geometry(),
+                    "default_skip_rows": self.skip_rows_var.get(),
+                    "remember_last_directory": True,
+                    "last_directory": ""
+                },
+                "plot_settings": {
+                    "color_palette": self.dataset_manager._color_palette,
+                    "default_width": 8,
+                    "default_height": 6,
+                    "default_dpi": 100
+                }
+            }
+            
+            # Get export file path
+            file_path = filedialog.asksaveasfilename(
+                title="Export Configuration As",
+                defaultextension=".json",
+                filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
+            )
+            
+            if file_path:
+                config_data = self.config_manager.export_current_settings(ui_state)
+                success = self.config_manager.save_config(file_path, config_data)
+                
+                if success:
+                    messagebox.showinfo(
+                        "Export Success", 
+                        f"Configuration exported successfully to:\n{file_path}"
+                    )
+                else:
+                    messagebox.showerror(
+                        "Export Error", 
+                        f"Failed to export configuration to:\n{file_path}"
+                    )
+                    
+        except Exception as e:
+            messagebox.showerror("Export Error", f"Error exporting configuration: {str(e)}")
+
+    def load_config_file(self):
+        """Load a configuration file and apply settings."""
+        file_path = filedialog.askopenfilename(
+            title="Load Configuration File",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
+        )
+        
+        if file_path:
+            success = self.config_manager.load_config(file_path)
+            
+            if success:
+                self._apply_config_settings()
+                self._update_analysis_mode_ui()  # Refresh UI after config change
+                self._update_data_mode_ui()
+                
+                messagebox.showinfo(
+                    "Configuration Loaded", 
+                    f"Configuration loaded and applied successfully from:\n{file_path}"
+                )
+            else:
+                messagebox.showerror(
+                    "Load Error", 
+                    f"Failed to load configuration from:\n{file_path}\n\nCheck the console for details."
+                )
+
+    def _create_sample_config_from_menu(self):
+        """Create a sample configuration file from the menu."""
+        file_path = filedialog.asksaveasfilename(
+            title="Save Sample Configuration As",
+            defaultextension=".json",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
+        )
+        
+        if file_path:
+            success = self.config_manager.create_sample_config(file_path)
+            
+            if success:
+                messagebox.showinfo(
+                    "Sample Created", 
+                    f"Sample configuration created successfully:\n{file_path}\n\n"
+                    "You can edit this file and load it using 'Load Configuration'."
+                )
+            else:
+                messagebox.showerror(
+                    "Creation Error", 
+                    f"Failed to create sample configuration:\n{file_path}"
+                )
+
+    def _show_about_dialog(self):
+        """Show about dialog."""
+        about_text = """Particle Data Analyzer v1.0
+
+    A comprehensive tool for analyzing particle size distribution data.
+
+    Features:
+    • Load and analyze CSV data files
+    • Multiple analysis modes (Calibration/Verification)
+    • Dataset management and comparison
+    • Statistical analysis and visualization
+    • PDF report generation
+    • Configurable settings via JSON files
+
+    Configuration files allow you to save and share default settings,
+    column mappings, and analysis preferences."""
+        
+        messagebox.showinfo("About", about_text)

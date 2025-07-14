@@ -1,0 +1,179 @@
+{
+  "metadata": {
+    "config_version": "1.0",
+    "created_date": "2024-01-15T10:30:00",
+    "description": "Sample Particle Data Analyzer Configuration",
+    "author": "Particle Analysis Lab",
+    "notes": "This configuration file contains default settings optimized for geological particle analysis"
+  },
+  "analysis_settings": {
+    "default_bin_count": 75,
+    "default_data_mode": "pre_aggregated",
+    "default_analysis_mode": "verification",
+    "show_stats_lines": true,
+    "auto_detect_columns": true,
+    "statistical_confidence_level": 0.95
+  },
+  "ui_settings": {
+    "window_geometry": "1600x1000",
+    "default_skip_rows": 2,
+    "remember_last_directory": true,
+    "last_directory": "/home/user/particle_data",
+    "auto_refresh_plots": true,
+    "show_dataset_colors": true
+  },
+  "column_mappings": {
+    "size_column_names": [
+      "size", "diameter", "particle_size", "Size", "Diameter",
+      "d", "D", "particle_diameter", "grain_size", "mesh_size",
+      "sieve_size", "dimension", "width", "length", "radius"
+    ],
+    "frequency_column_names": [
+      "frequency", "count", "number", "Frequency", "Count",
+      "freq", "n", "Number", "occurrences", "weight", "mass",
+      "percentage", "percent", "fraction", "abundance"
+    ],
+    "custom_mappings": {
+      "geological": {
+        "size_names": ["grain_size", "sieve_size", "mesh_opening"],
+        "frequency_names": ["mass_retained", "percent_passing", "cumulative_percent"]
+      },
+      "biological": {
+        "size_names": ["cell_diameter", "organism_size", "particle_length"],
+        "frequency_names": ["cell_count", "population", "density"]
+      }
+    }
+  },
+  "plot_settings": {
+    "default_width": 10,
+    "default_height": 7,
+    "default_dpi": 150,
+    "color_palette": [
+      "#2E86AB", "#A23B72", "#F18F01", "#C73E1D", "#592941",
+      "#7209B7", "#F72585", "#4361EE", "#4CC9F0", "#7B68EE"
+    ],
+    "statistical_line_colors": {
+      "mean": "#FF0000",
+      "std_1": "#FF8C00",
+      "std_2": "#9932CC"
+    },
+    "style_theme": "scientific",
+    "grid_alpha": 0.3,
+    "histogram_alpha": 0.7,
+    "line_width": 2.0
+  },
+  "random_data_generation": {
+    "size_bounds": {
+      "min": 0.01,
+      "max": 1000.0
+    },
+    "frequency_bounds": {
+      "min": 1,
+      "max": 5000
+    },
+    "default_point_count": 1000,
+    "available_distributions": ["lognormal", "normal", "uniform", "weibull", "gamma"],
+    "distribution_parameters": {
+      "lognormal": {"mu": 2.5, "sigma": 0.9},
+      "normal": {"mean": 50, "std": 15},
+      "weibull": {"shape": 2.0, "scale": 50}
+    }
+  },
+  "file_processing": {
+    "supported_encodings": ["utf-8", "windows-1252", "iso-8859-1", "cp1252", "latin1"],
+    "preview_max_lines": 100,
+    "queue_processing_enabled": true,
+    "auto_skip_detection": true,
+    "delimiter_detection": true,
+    "decimal_separator": "auto",
+    "thousands_separator": "auto"
+  },
+  "validation_rules": {
+    "size_data": {
+      "min_value": 0.001,
+      "max_value": 10000,
+      "allow_negative": false,
+      "require_positive": true
+    },
+    "frequency_data": {
+      "min_value": 0,
+      "max_value": 1000000,
+      "allow_zero": true,
+      "normalize_option": "auto"
+    },
+    "dataset_requirements": {
+      "min_data_points": 10,
+      "max_data_points": 100000,
+      "warn_on_small_dataset": 50
+    }
+  },
+  "report_settings": {
+    "default_format": "pdf",
+    "include_metadata": true,
+    "include_dataset_notes": true,
+    "include_analysis_params": true,
+    "include_raw_statistics": true,
+    "page_size": "A4",
+    "margins": {
+      "top": 72,
+      "bottom": 72,
+      "left": 72,
+      "right": 72
+    },
+    "fonts": {
+      "title": {"name": "Helvetica-Bold", "size": 18},
+      "heading": {"name": "Helvetica-Bold", "size": 14},
+      "body": {"name": "Helvetica", "size": 10},
+      "code": {"name": "Courier", "size": 9}
+    },
+    "include_sections": {
+      "executive_summary": true,
+      "methodology": true,
+      "raw_data_preview": false,
+      "statistical_analysis": true,
+      "conclusions": true
+    }
+  },
+  "advanced_analysis": {
+    "percentile_calculations": [10, 25, 50, 75, 90, 95, 99],
+    "distribution_fitting": {
+      "enabled": true,
+      "test_distributions": ["lognormal", "normal", "weibull", "gamma"],
+      "goodness_of_fit_tests": ["kolmogorov_smirnov", "anderson_darling"],
+      "confidence_intervals": true
+    },
+    "outlier_detection": {
+      "enabled": true,
+      "method": "iqr",
+      "threshold": 1.5,
+      "action": "flag"
+    }
+  },
+  "export_options": {
+    "csv_settings": {
+      "delimiter": ",",
+      "decimal_separator": ".",
+      "encoding": "utf-8",
+      "include_headers": true
+    },
+    "image_settings": {
+      "formats": ["png", "pdf", "svg"],
+      "dpi": 300,
+      "transparent_background": false,
+      "bbox_inches": "tight"
+    }
+  },
+  "quality_control": {
+    "data_validation": {
+      "check_duplicates": true,
+      "check_missing_values": true,
+      "check_outliers": true,
+      "auto_clean": false
+    },
+    "analysis_checks": {
+      "minimum_sample_size": 20,
+      "warn_on_skewed_data": true,
+      "flag_multimodal_distributions": true
+    }
+  }
+}
