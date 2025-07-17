@@ -112,26 +112,16 @@ class MainWindow:
         )
         self.mode_description.pack(anchor='w', pady=(5,0))
         
-        # === FILE LOADING CONTROLS === (Updated row numbers due to new mode section)
+        # === FILE LOADING CONTROLS === (Single smart button only)
         ttk.Label(self.control_frame, text="Data File:").grid(row=1, column=0, sticky='w', pady=2)
-        
-        file_frame = ttk.Frame(self.control_frame)
-        file_frame.grid(row=1, column=1, columnspan=2, sticky='ew', pady=2)
-        
-        # Single file loading
-        self.load_button = ttk.Button(file_frame, text="Load CSV", command=self.load_file)
-        self.load_button.grid(row=0, column=0, sticky='ew', padx=(0,5))
-        
-        # Multiple file loading (will be mode-restricted)
-        self.load_multiple_button = ttk.Button(file_frame, text="Load Multiple", command=self.load_multiple_files)
-        self.load_multiple_button.grid(row=0, column=1, sticky='ew', padx=(0,5))
-        
-        self.preview_button = ttk.Button(file_frame, text="Preview", command=self.preview_file)
-        self.preview_button.grid(row=0, column=2)
-        
-        # Configure file frame columns
-        file_frame.columnconfigure(0, weight=1)
-        file_frame.columnconfigure(1, weight=1)
+
+        # Single smart file loading button (full width)
+        self.smart_load_button = ttk.Button(
+            self.control_frame, 
+            text="Load CSV File", 
+            command=self.smart_load_files
+        )
+        self.smart_load_button.grid(row=1, column=1, columnspan=2, sticky='ew', pady=2)
         
         # Queue status display
         self.queue_status_frame = ttk.Frame(self.control_frame)
@@ -140,24 +130,15 @@ class MainWindow:
         self.queue_status_label = ttk.Label(self.queue_status_frame, text="", font=('TkDefaultFont', 8))
         self.queue_status_label.pack(anchor='w')
         
-        # File filtering options (row updated from 2 to 3)
-        filter_frame = ttk.Frame(self.control_frame)
-        filter_frame.grid(row=3, column=0, columnspan=3, sticky='ew', pady=2)
-        
-        ttk.Label(filter_frame, text="Skip rows:").grid(row=0, column=0, sticky='w')
-        self.skip_rows_entry = ttk.Entry(filter_frame, textvariable=self.skip_rows_var, width=6)
-        self.skip_rows_entry.grid(row=0, column=1, padx=5)
-        
-        ttk.Label(filter_frame, text="(header rows, metadata, etc.)").grid(row=0, column=2, sticky='w', padx=(5,0))
-        
-        # === RANDOM DATA GENERATION === (row updated from 3 to 4)
-        ttk.Separator(self.control_frame, orient='horizontal').grid(row=4, column=0, columnspan=3, sticky='ew', pady=5)
-        
-        ttk.Label(self.control_frame, text="Generate Random Data:").grid(row=5, column=0, sticky='w', pady=2)
-        
-        # Random data controls frame (row updated from 5 to 6)
+       
+        # === RANDOM DATA GENERATION === (row updated from 2 to 3)
+        ttk.Separator(self.control_frame, orient='horizontal').grid(row=3, column=0, columnspan=3, sticky='ew', pady=5)
+
+        ttk.Label(self.control_frame, text="Generate Random Data:").grid(row=4, column=0, sticky='w', pady=2)
+
+        # Random data controls frame (row updated from 4 to 5)
         random_frame = ttk.Frame(self.control_frame)
-        random_frame.grid(row=6, column=0, columnspan=3, sticky='ew', pady=2)
+        random_frame.grid(row=5, column=0, columnspan=3, sticky='ew', pady=2)
         
         ttk.Label(random_frame, text="Points:").grid(row=0, column=0, sticky='w')
         self.random_count_entry = ttk.Entry(random_frame, textvariable=self.random_count_var, width=8)
@@ -375,28 +356,15 @@ class MainWindow:
         mode = self.analysis_mode_var.get()
         is_calibration = (mode == 'calibration')
         
-        # Update button states based on mode
+        # Update smart button text based on mode
         if is_calibration:
-            # Calibration mode: restrict to single dataset operations
-            self.load_multiple_button.config(
-                state='disabled',
-                text="Load Multiple (Verification mode only)"
-            )
-            self._update_report_button_state_for_mode()
-            
-            # Update dataset navigation - still functional but less emphasized
-            self._update_navigation_buttons_for_mode()
-            
+            self.smart_load_button.config(text="📄 Load CSV File")
         else:  # verification mode
-            # Verification mode: enable multi-dataset operations
-            self.load_multiple_button.config(
-                state='normal',
-                text="Load Multiple"
-            )
-            self._update_report_button_state_for_mode()
-            
-            # Enable full dataset navigation
-            self._update_navigation_buttons_for_mode()
+            self.smart_load_button.config(text="📁 Load Data Files")
+        
+        # Update other UI elements based on mode
+        self._update_report_button_state_for_mode()
+        self._update_navigation_buttons_for_mode()
         
         logger.info(f"UI updated for {mode} mode")
     
@@ -461,53 +429,53 @@ class MainWindow:
     
     # === FILE LOADING METHODS (Modified to include analysis mode considerations) ===
     
-    def load_file(self):
-        """Load a CSV file and add it to the dataset manager."""
-        file_path = filedialog.askopenfilename(
-            title="Select CSV file",
-            filetypes=SUPPORTED_FILE_TYPES
-        )
+    def _load_file_directly(self, file_path):
+        """Load a file directly without preview (fallback method)."""
+        # file_path = filedialog.askopenfilename(
+        #     title="Select CSV file",
+        #     filetypes=SUPPORTED_FILE_TYPES
+        # )
         
-        if file_path:
-            try:
-                skip_rows = self.skip_rows_var.get()
-                if skip_rows < 0:
-                    skip_rows = 0
-                    self.skip_rows_var.set(0)
+        # if file_path:
+        try:
+            skip_rows = self.skip_rows_var.get()
+            if skip_rows < 0:
+                skip_rows = 0
+                self.skip_rows_var.set(0)
+            
+            # Create a default tag from filename
+            filename = file_path.split('/')[-1].split('\\')[-1]
+            default_tag = filename.replace('.csv', '').replace('.CSV', '')
+            
+            # Add dataset to manager
+            dataset_id = self.dataset_manager.add_dataset(
+                file_path=file_path,
+                tag=default_tag,
+                notes="",
+                skip_rows=skip_rows
+            )
+            
+            if dataset_id:
+                # Set as active dataset
+                self.dataset_manager.set_active_dataset(dataset_id)
                 
-                # Create a default tag from filename
-                filename = file_path.split('/')[-1].split('\\')[-1]
-                default_tag = filename.replace('.csv', '').replace('.CSV', '')
+                # Update UI
+                self._update_dataset_ui()
+                self._load_active_dataset_settings()
+                self._update_column_combos()
+                self._update_stats_display()
+                self.plot_button.config(state='normal')
                 
-                # Add dataset to manager
-                dataset_id = self.dataset_manager.add_dataset(
-                    file_path=file_path,
-                    tag=default_tag,
-                    notes="",
-                    skip_rows=skip_rows
-                )
-                
-                if dataset_id:
-                    # Set as active dataset
-                    self.dataset_manager.set_active_dataset(dataset_id)
-                    
-                    # Update UI
-                    self._update_dataset_ui()
-                    self._load_active_dataset_settings()
-                    self._update_column_combos()
-                    self._update_stats_display()
-                    self.plot_button.config(state='normal')
-                    
-                    if skip_rows > 0:
-                        messagebox.showinfo("Success", f"Dataset '{default_tag}' loaded successfully!\nSkipped {skip_rows} rows.")
-                    else:
-                        messagebox.showinfo("Success", f"Dataset '{default_tag}' loaded successfully!")
+                if skip_rows > 0:
+                    messagebox.showinfo("Success", f"Dataset '{default_tag}' loaded successfully!\nSkipped {skip_rows} rows.")
                 else:
-                    messagebox.showerror("Error", "Failed to load file. Please check the file format.")
-                    
-            except ValueError:
-                messagebox.showerror("Error", "Please enter a valid number for rows to skip.")
-    
+                    messagebox.showinfo("Success", f"Dataset '{default_tag}' loaded successfully!")
+            else:
+                messagebox.showerror("Error", "Failed to load file. Please check the file format.")
+                
+        except ValueError:
+            messagebox.showerror("Error", "Please enter a valid number for rows to skip.")
+
     def load_multiple_files(self):
         """Load multiple CSV files using file queue system."""
         # Check mode restriction first
@@ -541,7 +509,153 @@ class MainWindow:
                 self._start_queue_processing()
             else:
                 messagebox.showerror("Error", "No valid files were added to the queue.")
-    
+
+    def smart_load_files(self):
+        """Smart file loading that adapts to analysis mode."""
+        mode = self.analysis_mode_var.get()
+        
+        if mode == 'calibration':
+            # Calibration mode: single file loading with enhanced preview
+            self._load_single_file_with_preview()
+        else:
+            # Verification mode: show choice between single and multiple
+            self._show_load_choice_dialog()
+
+    def _load_single_file_with_preview(self):
+        """Load a single file with automatic preview option."""
+        file_path = filedialog.askopenfilename(
+            title="Select CSV file",
+            filetypes=SUPPORTED_FILE_TYPES
+        )
+        
+        if file_path:
+            # Show preview dialog first, with option to load directly
+            temp_processor = ParticleDataProcessor()
+            preview_data = temp_processor.preview_csv(file_path, preview_rows=10)
+            
+            if preview_data['success']:
+                self._show_enhanced_preview_dialog(preview_data, file_path)
+            else:
+                # If preview fails, ask if user wants to try loading anyway
+                result = messagebox.askyesno(
+                    "Preview Failed",
+                    f"Could not preview file:\n{preview_data.get('error', 'Unknown error')}\n\n"
+                    "Would you like to try loading it anyway?"
+                )
+                if result:
+                    self._load_file_directly(file_path)
+
+    def _show_load_choice_dialog(self):
+        """Show dialog to choose between single or multiple file loading - DEBUG VERSION."""
+        choice_dialog = tk.Toplevel(self.root)
+        choice_dialog.title("Load Data Files")
+        choice_dialog.geometry("450x450")  # Made much bigger
+        choice_dialog.grab_set()
+        choice_dialog.resizable(True, True)  # Allow resizing for testing
+        
+        # Center the dialog
+        choice_dialog.transient(self.root)
+        choice_dialog.update_idletasks()
+        x = (choice_dialog.winfo_screenwidth() // 2) - (450 // 2)
+        y = (choice_dialog.winfo_screenheight() // 2) - (450 // 2)
+        choice_dialog.geometry(f"450x450+{x}+{y}")
+        
+        # Main frame
+        main_frame = ttk.Frame(choice_dialog, padding=20)
+        main_frame.pack(fill='both', expand=True)
+        
+        # Title
+        title_label = ttk.Label(
+            main_frame, 
+            text="Choose Loading Method", 
+            font=('TkDefaultFont', 12, 'bold')
+        )
+        title_label.pack(pady=(0, 15))
+        
+        # Description
+        desc_label = ttk.Label(
+            main_frame,
+            text="Verification mode supports both single and multiple file analysis:",
+            font=('TkDefaultFont', 9),
+            foreground='gray'
+        )
+        desc_label.pack(pady=(0, 20))
+        
+        # Button frame
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill='both', expand=True, pady=10)
+        
+        # === SINGLE FILE SECTION ===
+        single_frame = ttk.LabelFrame(button_frame, text="Single File", padding=15)
+        single_frame.pack(fill='x', pady=(0, 15))  # Increased spacing
+        
+        # Single file description
+        single_desc = ttk.Label(
+            single_frame, 
+            text="Load one CSV file with preview and filtering options",
+            font=('TkDefaultFont', 8),
+            foreground='blue'
+        )
+        single_desc.pack(anchor='w')  # Changed to anchor='w' for left alignment
+        
+        # Single file button
+        single_btn = ttk.Button(
+            single_frame, 
+            text="📄 Load Single File",
+            command=lambda: self._choice_single_file(choice_dialog),
+            width=20  # Added explicit width
+        )
+        single_btn.pack(pady=(10, 0), anchor='w')  # Changed positioning
+        
+        # === MULTIPLE FILES SECTION ===
+        multi_frame = ttk.LabelFrame(button_frame, text="Multiple Files", padding=15)
+        multi_frame.pack(fill='x', pady=(0, 15))  # Added bottom padding
+        
+        # Multiple files description
+        multi_desc = ttk.Label(
+            multi_frame, 
+            text="Load multiple CSV files for comparison analysis",
+            font=('TkDefaultFont', 8),
+            foreground='green'
+        )
+        multi_desc.pack(anchor='w')  # Changed to anchor='w' for left alignment
+        
+        # Multiple files button
+        multi_btn = ttk.Button(
+            multi_frame, 
+            text="📁 Load Multiple Files",
+            command=lambda: self._choice_multiple_files(choice_dialog),
+            width=20  # Added explicit width
+        )
+        multi_btn.pack(pady=(10, 0), anchor='w')  # Changed positioning
+        
+        # === CANCEL BUTTON ===
+        cancel_btn = ttk.Button(
+            main_frame, 
+            text="Cancel", 
+            command=choice_dialog.destroy
+        )
+        cancel_btn.pack(pady=(20, 0))
+        
+        # Set focus and bind escape key
+        choice_dialog.focus_set()
+        choice_dialog.bind('<Escape>', lambda e: choice_dialog.destroy())
+        
+        # Print debug info to console
+        print(f"Dialog created with analysis mode: {self.analysis_mode_var.get()}")
+        print(f"Single frame created: {single_frame}")
+        print(f"Multi frame created: {multi_frame}")
+
+    def _choice_single_file(self, dialog):
+        """Handle single file choice from dialog."""
+        dialog.destroy()
+        self._load_single_file_with_preview()
+
+    def _choice_multiple_files(self, dialog):
+        """Handle multiple files choice from dialog."""
+        dialog.destroy()
+        self.load_multiple_files()  # Use existing method
+
     def preview_file(self):
         """Preview a CSV file to help identify junk data."""
         file_path = filedialog.askopenfilename(
