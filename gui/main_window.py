@@ -13,6 +13,9 @@ from core.dataset_manager import DatasetManager
 from core.plotter import ParticlePlotter
 from config.constants import SUPPORTED_FILE_TYPES, MIN_BIN_COUNT, MAX_BIN_COUNT, DEFAULT_BIN_COUNT, RANDOM_DATA_BOUNDS
 from core.file_queue import FileQueue
+from gui.dialogs.file_preview import FilePreviewDialog
+from gui.dialogs.load_choice import LoadChoiceDialog
+
 
 # Try to import report generation (now required dependency)
 try:
@@ -519,7 +522,8 @@ class MainWindow:
             self._load_single_file_with_preview()
         else:
             # Verification mode: show choice between single and multiple
-            self._show_load_choice_dialog()
+            choice_dialog = LoadChoiceDialog(self.root, self._handle_load_choice)
+            choice_dialog.show()
 
     def _load_single_file_with_preview(self):
         """Load a single file with automatic preview option."""
@@ -529,23 +533,52 @@ class MainWindow:
         )
         
         if file_path:
-            # Show preview dialog first, with option to load directly
-            temp_processor = ParticleDataProcessor()
-            preview_data = temp_processor.preview_csv(file_path, preview_rows=10)
-            
-            if preview_data['success']:
-                self._show_enhanced_preview_dialog(preview_data, file_path)
-            else:
-                # If preview fails, ask if user wants to try loading anyway
-                result = messagebox.askyesno(
-                    "Preview Failed",
-                    f"Could not preview file:\n{preview_data.get('error', 'Unknown error')}\n\n"
-                    "Would you like to try loading it anyway?"
-                )
-                if result:
-                    self._load_file_directly(file_path)
+            # Create and show the preview dialog
+            preview_dialog = FilePreviewDialog(self.root, file_path, self._handle_file_load)
+            preview_dialog.show()
 
-    def _show_load_choice_dialog(self):
+    def _handle_load_choice(self, choice: str):
+        """Handle the user's choice from the load choice dialog."""
+        if choice == 'single':
+            self._load_single_file_with_preview()
+        elif choice == 'multiple':
+            self.load_multiple_files()
+        # If choice == 'cancel', do nothing
+
+    def _handle_file_load(self, file_path: str, tag: str, skip_rows: int):
+        """Handle file loading from the preview dialog callback."""
+        try:
+            # Add dataset to manager
+            dataset_id = self.dataset_manager.add_dataset(
+                file_path=file_path,
+                tag=tag,
+                notes="",
+                skip_rows=skip_rows
+            )
+            
+            if dataset_id:
+                # Set as active dataset
+                self.dataset_manager.set_active_dataset(dataset_id)
+                
+                # Update UI
+                self._update_dataset_ui()
+                self._load_active_dataset_settings()
+                self._update_column_combos()
+                self._update_stats_display()
+                self.plot_button.config(state='normal')
+                self._update_report_button_state()
+                
+                if skip_rows > 0:
+                    messagebox.showinfo("Success", f"Dataset '{tag}' loaded successfully!\nSkipped {skip_rows} rows.")
+                else:
+                    messagebox.showinfo("Success", f"Dataset '{tag}' loaded successfully!")
+            else:
+                messagebox.showerror("Error", "Failed to load file. Please check the file format.")
+                
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load file: {str(e)}")
+
+
         """Show dialog to choose between single or multiple file loading - DEBUG VERSION."""
         choice_dialog = tk.Toplevel(self.root)
         choice_dialog.title("Load Data Files")
@@ -646,16 +679,6 @@ class MainWindow:
         print(f"Single frame created: {single_frame}")
         print(f"Multi frame created: {multi_frame}")
 
-    def _choice_single_file(self, dialog):
-        """Handle single file choice from dialog."""
-        dialog.destroy()
-        self._load_single_file_with_preview()
-
-    def _choice_multiple_files(self, dialog):
-        """Handle multiple files choice from dialog."""
-        dialog.destroy()
-        self.load_multiple_files()  # Use existing method
-
     def preview_file(self):
         """Preview a CSV file to help identify junk data."""
         file_path = filedialog.askopenfilename(
@@ -664,184 +687,12 @@ class MainWindow:
         )
         
         if file_path:
-            # Create a temporary data processor for preview
-            temp_processor = ParticleDataProcessor()
-            preview_data = temp_processor.preview_csv(file_path, preview_rows=15)
+            # Simple callback that doesn't actually load anything
+            def preview_only_callback(file_path, tag, skip_rows):
+                messagebox.showinfo("Preview Only", "File preview completed. No data was loaded.")
             
-            if preview_data['success']:
-                self._show_enhanced_preview_dialog(preview_data, file_path)
-            else:
-                messagebox.showerror("Preview Error", f"Failed to preview file:\n{preview_data['error']}")
-    
-    def _show_enhanced_preview_dialog(self, initial_preview_data, file_path):
-        """Show an enhanced dialog with configurable preview and filtering options."""
-        preview_window = tk.Toplevel(self.root)
-        preview_window.title("CSV File Preview - Enhanced")
-        preview_window.geometry("950x750")
-        preview_window.grab_set()  # Make it modal
-        
-        # File info header
-        info_frame = ttk.LabelFrame(preview_window, text="File Information", padding=5)
-        info_frame.pack(fill='x', padx=10, pady=5)
-        
-        ttk.Label(info_frame, text=f"File: {file_path.split('/')[-1]}", font=('TkDefaultFont', 9, 'bold')).pack(anchor='w')
-        ttk.Label(info_frame, text=f"Total lines: {initial_preview_data['total_lines']}").pack(anchor='w')
-        ttk.Label(info_frame, text=f"Detected columns: {initial_preview_data['detected_columns']}").pack(anchor='w')
-        
-        # Preview controls section
-        preview_control_frame = ttk.LabelFrame(preview_window, text="Preview Controls", padding=5)
-        preview_control_frame.pack(fill='x', padx=10, pady=5)
-        
-        # Preview length controls
-        controls_row = ttk.Frame(preview_control_frame)
-        controls_row.pack(fill='x')
-        
-        ttk.Label(controls_row, text="Preview lines:").grid(row=0, column=0, sticky='w', padx=(0,5))
-        preview_lines_var = tk.IntVar(value=15)
-        preview_lines_entry = ttk.Entry(controls_row, textvariable=preview_lines_var, width=8)
-        preview_lines_entry.grid(row=0, column=1, padx=5)
-        
-        def refresh_preview():
-            try:
-                num_lines = preview_lines_var.get()
-                if num_lines < 1:
-                    num_lines = 1
-                    preview_lines_var.set(1)
-                elif num_lines > 1000:
-                    num_lines = 1000
-                    preview_lines_var.set(1000)
-                
-                # Get new preview data
-                temp_processor = ParticleDataProcessor()
-                new_preview_data = temp_processor.preview_csv(file_path, preview_rows=num_lines)
-                
-                if new_preview_data['success']:
-                    # Clear and update preview text
-                    preview_text.config(state='normal')
-                    preview_text.delete(1.0, tk.END)
-                    
-                    # Add preview content with row numbers
-                    for i, line in enumerate(new_preview_data['preview_lines']):
-                        preview_text.insert(tk.END, f"{i:3d}: {line}\n")
-                    
-                    preview_text.config(state='disabled')
-                    
-                    # Update status
-                    status_label.config(text=f"✓ Showing first {len(new_preview_data['preview_lines'])} lines")
-                else:
-                    messagebox.showerror("Preview Error", f"Failed to refresh preview:\n{new_preview_data['error']}")
-                    
-            except tk.TclError:
-                messagebox.showerror("Error", "Please enter a valid number of lines to preview.")
-        
-        refresh_button = ttk.Button(controls_row, text="🔄 Refresh Preview", command=refresh_preview)
-        refresh_button.grid(row=0, column=2, padx=10)
-        
-        ttk.Label(controls_row, text="(1-1000 lines)", font=('TkDefaultFont', 8)).grid(row=0, column=3, sticky='w', padx=(5,0))
-        
-        # Status label
-        status_label = ttk.Label(controls_row, text=f"✓ Showing first {len(initial_preview_data['preview_lines'])} lines", 
-                               foreground='green', font=('TkDefaultFont', 8))
-        status_label.grid(row=0, column=4, sticky='w', padx=(20,0))
-        
-        # Preview text section
-        preview_section = ttk.LabelFrame(preview_window, text="File Preview", padding=5)
-        preview_section.pack(fill='both', expand=True, padx=10, pady=5)
-        
-        # Text widget with scrollbars
-        text_frame = ttk.Frame(preview_section)
-        text_frame.pack(fill='both', expand=True)
-        
-        preview_text = tk.Text(text_frame, wrap='none', font=('Courier', 9))
-        scrollbar_y = ttk.Scrollbar(text_frame, orient='vertical', command=preview_text.yview)
-        scrollbar_x = ttk.Scrollbar(text_frame, orient='horizontal', command=preview_text.xview)
-        
-        preview_text.configure(yscrollcommand=scrollbar_y.set, xscrollcommand=scrollbar_x.set)
-        
-        preview_text.grid(row=0, column=0, sticky='nsew')
-        scrollbar_y.grid(row=0, column=1, sticky='ns')
-        scrollbar_x.grid(row=1, column=0, sticky='ew')
-        
-        text_frame.grid_rowconfigure(0, weight=1)
-        text_frame.grid_columnconfigure(0, weight=1)
-        
-        # Add initial preview content with row numbers
-        for i, line in enumerate(initial_preview_data['preview_lines']):
-            preview_text.insert(tk.END, f"{i:3d}: {line}\n")
-        
-        preview_text.config(state='disabled')
-        
-        # Allow Enter key to refresh preview
-        preview_lines_entry.bind('<Return>', lambda e: refresh_preview())
-        
-        # Filter controls section
-        filter_frame = ttk.LabelFrame(preview_window, text="Data Filtering Options", padding=10)
-        filter_frame.pack(fill='x', padx=10, pady=5)
-        
-        filter_row = ttk.Frame(filter_frame)
-        filter_row.pack(fill='x')
-        
-        ttk.Label(filter_row, text="Skip rows from top:").grid(row=0, column=0, sticky='w')
-        skip_var = tk.IntVar(value=self.skip_rows_var.get())
-        skip_entry = ttk.Entry(filter_row, textvariable=skip_var, width=6)
-        skip_entry.grid(row=0, column=1, padx=10)
-        
-        ttk.Label(filter_row, text="(Use this to skip headers, metadata, or junk data)", 
-                 font=('TkDefaultFont', 8)).grid(row=0, column=2, sticky='w', padx=(10,0))
-        
-        # Buttons section
-        button_frame = ttk.Frame(preview_window)
-        button_frame.pack(fill='x', padx=10, pady=10)
-        
-        def load_with_filter():
-            try:
-                skip_rows = skip_var.get()
-                if skip_rows < 0:
-                    skip_rows = 0
-                    
-                self.skip_rows_var.set(skip_rows)
-                preview_window.destroy()
-                
-                # Create a default tag from filename
-                filename = file_path.split('/')[-1].split('\\')[-1]
-                default_tag = filename.replace('.csv', '').replace('.CSV', '')
-                
-                # Add dataset to manager
-                dataset_id = self.dataset_manager.add_dataset(
-                    file_path=file_path,
-                    tag=default_tag,
-                    notes="",
-                    skip_rows=skip_rows
-                )
-                
-                if dataset_id:
-                    # Set as active dataset
-                    self.dataset_manager.set_active_dataset(dataset_id)
-                    
-                    # Update UI
-                    self._update_dataset_ui()
-                    self._load_active_dataset_settings()
-                    self._update_column_combos()
-                    self._update_stats_display()
-                    self.plot_button.config(state='normal')
-                    self._update_report_button_state()
-                    
-                    if skip_rows > 0:
-                        messagebox.showinfo("Success", f"Dataset '{default_tag}' loaded successfully!\nSkipped {skip_rows} rows.")
-                    else:
-                        messagebox.showinfo("Success", f"Dataset '{default_tag}' loaded successfully!")
-                else:
-                    messagebox.showerror("Error", "Failed to load file. Please check the file format.")
-                    
-            except tk.TclError:
-                messagebox.showerror("Error", "Please enter a valid number for rows to skip.")
-        
-        ttk.Button(button_frame, text="📁 Load with Filter", command=load_with_filter).pack(side='left', padx=5)
-        ttk.Button(button_frame, text="❌ Cancel", command=preview_window.destroy).pack(side='left', padx=5)
-        
-        # Focus on preview lines entry for immediate use
-        preview_lines_entry.focus_set()
-        preview_lines_entry.select_range(0, tk.END)
+            preview_dialog = FilePreviewDialog(self.root, file_path, preview_only_callback)
+            preview_dialog.show()    
     
     def generate_random_data(self):
         """Generate random particle data for testing."""
