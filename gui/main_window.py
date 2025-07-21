@@ -50,7 +50,7 @@ class MainWindow:
         self.random_count_var = tk.IntVar(value=RANDOM_DATA_BOUNDS['default_n'])
         self.distribution_var = tk.StringVar(value='lognormal')
         self.show_stats_lines_var = tk.BooleanVar(value=True)
-        self.data_mode_var = tk.StringVar(value='pre_aggregated')
+        self.data_mode_var = tk.StringVar(value='raw_measurements')  # 'pre_aggregated' or 'raw_measurements'
         self.skip_rows_var = tk.IntVar(value=0)
         
         # Analysis mode selection variable (calibration vs verification)
@@ -195,30 +195,25 @@ class MainWindow:
         
         # Bin count control
         ttk.Label(self.control_frame, text="Bins:").grid(row=11, column=0, sticky='w', pady=2)
-        
+
         # Create frame for bin controls
         bin_frame = ttk.Frame(self.control_frame)
         bin_frame.grid(row=11, column=1, columnspan=2, sticky='ew', pady=2)
-        
-        # Bin count slider
-        self.bin_scale = ttk.Scale(bin_frame, from_=MIN_BIN_COUNT, to=MAX_BIN_COUNT, 
-                                  variable=self.bin_count_var, orient='horizontal')
-        self.bin_scale.grid(row=0, column=0, sticky='ew', padx=(0,5))
-        
-        # Configure scale to use integer values only
-        self.bin_scale.configure(command=self._on_bin_scale_move)
-        
-        # Bind to ButtonRelease instead of continuous movement for plot updates
-        self.bin_scale.bind('<ButtonRelease-1>', self._on_bin_scale_release)
-        
-        # Bin count entry field
-        self.bin_entry = ttk.Entry(bin_frame, textvariable=self.bin_count_var, width=6)
-        self.bin_entry.grid(row=0, column=1)
+
+        # Bin count entry field only (remove slider)
+        self.bin_entry = ttk.Entry(bin_frame, textvariable=self.bin_count_var, width=8)
+        self.bin_entry.grid(row=0, column=0, sticky='w')
         self.bin_entry.bind('<Return>', self._on_bin_entry_change)
         self.bin_entry.bind('<FocusOut>', self._on_bin_entry_change)
-        
-        # Configure bin frame column weights
-        bin_frame.columnconfigure(0, weight=1)
+
+        # Optional: Add a label showing the valid range
+        bin_hint_label = ttk.Label(bin_frame, text=f"({MIN_BIN_COUNT}-{MAX_BIN_COUNT})", 
+                                font=('TkDefaultFont', 8), foreground='gray')
+        bin_hint_label.grid(row=0, column=1, sticky='w', padx=(5,0))
+
+        # Configure bin frame column weights (optional, for consistent spacing)
+        bin_frame.columnconfigure(0, weight=0)  # Entry field doesn't need to expand
+        bin_frame.columnconfigure(1, weight=1)  # Hint label can expand if needed
         
         # Statistical lines toggle
         self.stats_lines_check = ttk.Checkbutton(self.control_frame, 
@@ -965,7 +960,7 @@ class MainWindow:
             
             tag_entry.focus_set()
             tag_entry.select_range(0, tk.END)
-            
+
     def _load_current_queue_file(self, file_path, dataset_tag, skip_rows):
         """Load the current queue file as a dataset."""
         try:
