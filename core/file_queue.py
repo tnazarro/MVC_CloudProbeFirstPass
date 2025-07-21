@@ -68,29 +68,43 @@ class FileQueue:
     
     def _generate_auto_tag(self, filename: str) -> str:
         """
-        Generate an automatic tag from filename.
+        Generate an automatic numeric tag from filename.
         
         Args:
             filename: Original filename
             
         Returns:
-            str: Generated tag
+            str: Generated numeric tag (defaults to incremental if no number found)
         """
-        # Remove extension and clean up common patterns
+        import re
+        
+        # Remove extension
         base_name = Path(filename).stem
         
-        # Remove common prefixes/suffixes that might not be meaningful
-        # Users can override these during preview
-        base_name = base_name.replace('_data', '').replace('_export', '')
-        base_name = base_name.replace('-data', '').replace('-export', '')
+        # Try to extract numbers from filename
+        numbers = re.findall(r'-?\d+\.?\d*', base_name)
         
-        # Replace underscores and hyphens with spaces for readability
-        clean_name = base_name.replace('_', ' ').replace('-', ' ')
+        if numbers:
+            # Use the first number found
+            try:
+                return str(float(numbers[0]))
+            except ValueError:
+                pass
         
-        # Capitalize words
-        auto_tag = ' '.join(word.capitalize() for word in clean_name.split())
+        # If no number found, generate incremental tag based on existing files in queue
+        existing_tags = []
+        for file_entry in self.files:
+            try:
+                existing_tags.append(float(file_entry['auto_tag']))
+            except (ValueError, TypeError):
+                pass
         
-        return auto_tag or filename  # Fallback to filename if cleaning results in empty string
+        # Find next available integer
+        next_tag = 1.0
+        while next_tag in existing_tags:
+            next_tag += 1.0
+        
+        return str(int(next_tag)) if next_tag == int(next_tag) else str(next_tag)
     
     def get_current_file(self) -> Optional[Dict[str, Any]]:
         """

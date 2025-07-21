@@ -1,5 +1,6 @@
 """
 Main GUI window for the Particle Data Analyzer with Dataset Manager integration and Analysis Mode Selection.
+Updated with compact dataset panel and inline tag editing - saving vertical space.
 """
 
 import tkinter as tk
@@ -52,8 +53,12 @@ class MainWindow:
         self.data_mode_var = tk.StringVar(value='pre_aggregated')
         self.skip_rows_var = tk.IntVar(value=0)
         
-        # NEW: Analysis mode selection variable (calibration vs verification)
+        # Analysis mode selection variable (calibration vs verification)
         self.analysis_mode_var = tk.StringVar(value='calibration')
+        
+        # NEW: Inline tag editing variable
+        self.current_tag_var = tk.StringVar()
+        self._updating_tag = False  # Flag to prevent recursive updates
         
         # Track current figure for proper cleanup
         self.current_figure = None
@@ -70,7 +75,7 @@ class MainWindow:
         # Initialize UI state
         self._update_data_mode_ui()
         self._update_dataset_ui()
-        self._update_analysis_mode_ui()  # NEW: Initialize analysis mode UI
+        self._update_analysis_mode_ui()
     
     def _create_widgets(self):
         """Create all GUI widgets."""
@@ -80,7 +85,7 @@ class MainWindow:
         # Control frame (left side)
         self.control_frame = ttk.LabelFrame(self.main_frame, text="Controls", padding=10)
         
-        # === NEW: ANALYSIS MODE SELECTION ===
+        # === ANALYSIS MODE SELECTION ===
         self.analysis_mode_frame = ttk.LabelFrame(self.control_frame, text="Analysis Mode", padding=5)
         self.analysis_mode_frame.grid(row=0, column=0, columnspan=3, sticky='ew', pady=(0,10))
         
@@ -115,7 +120,7 @@ class MainWindow:
         )
         self.mode_description.pack(anchor='w', pady=(5,0))
         
-        # === FILE LOADING CONTROLS === (Single smart button only)
+        # === FILE LOADING CONTROLS ===
         ttk.Label(self.control_frame, text="Data File:").grid(row=1, column=0, sticky='w', pady=2)
 
         # Single smart file loading button (full width)
@@ -133,13 +138,12 @@ class MainWindow:
         self.queue_status_label = ttk.Label(self.queue_status_frame, text="", font=('TkDefaultFont', 8))
         self.queue_status_label.pack(anchor='w')
         
-       
-        # === RANDOM DATA GENERATION === (row updated from 2 to 3)
+        # === RANDOM DATA GENERATION ===
         ttk.Separator(self.control_frame, orient='horizontal').grid(row=3, column=0, columnspan=3, sticky='ew', pady=5)
 
         ttk.Label(self.control_frame, text="Generate Random Data:").grid(row=4, column=0, sticky='w', pady=2)
 
-        # Random data controls frame (row updated from 4 to 5)
+        # Random data controls frame
         random_frame = ttk.Frame(self.control_frame)
         random_frame.grid(row=5, column=0, columnspan=3, sticky='ew', pady=2)
         
@@ -156,10 +160,10 @@ class MainWindow:
         self.generate_button = ttk.Button(random_frame, text="Generate", command=self.generate_random_data)
         self.generate_button.grid(row=0, column=4, padx=5)
         
-        # === DATA ANALYSIS CONTROLS === (row updated from 6 to 7)
+        # === DATA ANALYSIS CONTROLS ===
         ttk.Separator(self.control_frame, orient='horizontal').grid(row=7, column=0, columnspan=3, sticky='ew', pady=5)
         
-        # Data mode selection (row updated from 7 to 8)
+        # Data mode selection
         ttk.Label(self.control_frame, text="Data Type:").grid(row=8, column=0, sticky='w', pady=2)
         
         data_mode_frame = ttk.Frame(self.control_frame)
@@ -175,7 +179,7 @@ class MainWindow:
                                        command=self._on_data_mode_change)
         self.raw_radio.grid(row=1, column=0, sticky='w')
         
-        # Column selection (rows updated from 8,9 to 9,10)
+        # Column selection
         ttk.Label(self.control_frame, text="Size Column:").grid(row=9, column=0, sticky='w', pady=2)
         self.size_combo = ttk.Combobox(self.control_frame, textvariable=self.size_column_var, 
                                       state='readonly')
@@ -189,7 +193,7 @@ class MainWindow:
         self.frequency_combo.grid(row=10, column=1, sticky='ew', pady=2)
         self.frequency_combo.bind('<<ComboboxSelected>>', self._on_column_change)
         
-        # Bin count control (row updated from 10 to 11)
+        # Bin count control
         ttk.Label(self.control_frame, text="Bins:").grid(row=11, column=0, sticky='w', pady=2)
         
         # Create frame for bin controls
@@ -216,19 +220,19 @@ class MainWindow:
         # Configure bin frame column weights
         bin_frame.columnconfigure(0, weight=1)
         
-        # Statistical lines toggle (row updated from 11 to 12)
+        # Statistical lines toggle
         self.stats_lines_check = ttk.Checkbutton(self.control_frame, 
                                                 text="Show Mean & Std Dev Lines", 
                                                 variable=self.show_stats_lines_var,
                                                 command=self._on_stats_toggle)
         self.stats_lines_check.grid(row=12, column=0, columnspan=2, sticky='w', pady=2)
         
-        # Plot button (row updated from 12 to 13)
+        # Plot button
         self.plot_button = ttk.Button(self.control_frame, text="Create Plot", 
                                      command=self.create_plot, state='disabled')
         self.plot_button.grid(row=13, column=0, columnspan=2, sticky='ew', pady=10)
         
-        # Report generation button (row updated from 13 to 14) - will be mode-restricted
+        # Report generation button - will be mode-restricted
         self.report_button = ttk.Button(self.control_frame, text="Generate Report", 
                                        command=self.generate_report, state='disabled')
         self.report_button.grid(row=14, column=0, columnspan=2, sticky='ew', pady=5)
@@ -237,10 +241,10 @@ class MainWindow:
         if not REPORTS_AVAILABLE:
             self.report_button.config(state='disabled', text="Generate Report (ReportLab not installed)")
         
-        # === DATASET MANAGEMENT CONTROLS === (row updated from 14 to 15)
+        # === DATASET MANAGEMENT CONTROLS ===
         ttk.Separator(self.control_frame, orient='horizontal').grid(row=15, column=0, columnspan=3, sticky='ew', pady=10)
         
-        # Dataset management frame (row updated from 15 to 16)
+        # Dataset management frame
         self.dataset_mgmt_frame = ttk.LabelFrame(self.control_frame, text="Dataset Management", padding=5)
         self.dataset_mgmt_frame.grid(row=16, column=0, columnspan=3, sticky='ew', pady=5)
         
@@ -256,21 +260,9 @@ class MainWindow:
                                           command=self.next_dataset, state='disabled')
         self.next_dataset_btn.pack(side='left')
         
-        # Dataset info display
-        self.dataset_info_frame = ttk.Frame(self.dataset_mgmt_frame)
-        self.dataset_info_frame.pack(fill='x', pady=5)
-        
-        self.dataset_info_label = ttk.Label(self.dataset_info_frame, text="No datasets loaded", 
-                                           font=('TkDefaultFont', 9, 'bold'))
-        self.dataset_info_label.pack(anchor='w')
-        
-        # Dataset actions
+        # Dataset actions (removed Edit Tag since we have inline editing)
         actions_frame = ttk.Frame(self.dataset_mgmt_frame)
         actions_frame.pack(fill='x', pady=5)
-        
-        self.edit_tag_btn = ttk.Button(actions_frame, text="Edit Tag", 
-                                      command=self.edit_dataset_tag, state='disabled')
-        self.edit_tag_btn.pack(side='left', padx=(0,5))
         
         self.edit_notes_btn = ttk.Button(actions_frame, text="Edit Notes", 
                                         command=self.edit_dataset_notes, state='disabled')
@@ -280,28 +272,104 @@ class MainWindow:
                                             command=self.remove_dataset, state='disabled')
         self.remove_dataset_btn.pack(side='left')
         
-        # Stats display (row updated from 16 to 17)
+        # Stats display
         self.stats_frame = ttk.LabelFrame(self.control_frame, text="Data Info", padding=5)
         self.stats_frame.grid(row=17, column=0, columnspan=3, sticky='ew', pady=5)
         
         self.stats_text = tk.Text(self.stats_frame, height=8, width=30)
         self.stats_text.pack(fill='both', expand=True)
         
-        # === DATASET LIST (Center) ===
+        # === COMPACT DATASET LIST (Center) ===
         self.dataset_list_frame = ttk.LabelFrame(self.main_frame, text="Loaded Datasets", padding=5)
         
-        # Dataset listbox with scrollbar
+        # Dataset treeview with scrollbar - REDUCED HEIGHT to 10 rows with separate columns
         list_container = ttk.Frame(self.dataset_list_frame)
-        list_container.pack(fill='both', expand=True)
+        list_container.pack(fill='x', pady=(0,5))  # Changed from fill='both', expand=True
         
-        self.dataset_listbox = tk.Listbox(list_container, height=6, selectmode='single')
-        dataset_scrollbar = ttk.Scrollbar(list_container, orient='vertical', command=self.dataset_listbox.yview)
+        # Create Treeview with columns for Tag and Filename
+        self.dataset_treeview = ttk.Treeview(
+            list_container, 
+            columns=('tag', 'filename'), 
+            show='tree headings',  # Show both tree and headings
+            height=10,  # REDUCED to 10 rows
+            selectmode='browse'  # Single selection
+        )
         
-        self.dataset_listbox.configure(yscrollcommand=dataset_scrollbar.set)
-        self.dataset_listbox.bind('<<ListboxSelect>>', self._on_dataset_select)
+        # Configure columns
+        self.dataset_treeview.heading('#0', text='')  # Hide the tree column header
+        self.dataset_treeview.heading('tag', text='Tag')
+        self.dataset_treeview.heading('filename', text='Filename')
         
-        self.dataset_listbox.pack(side='left', fill='both', expand=True)
-        dataset_scrollbar.pack(side='right', fill='y')
+        # Set column widths
+        self.dataset_treeview.column('#0', width=20, minwidth=20, stretch=False)  # Small tree column for bullet
+        self.dataset_treeview.column('tag', width=120, minwidth=80, stretch=True)
+        self.dataset_treeview.column('filename', width=180, minwidth=100, stretch=True)
+        
+        # Scrollbars
+        dataset_scrollbar_y = ttk.Scrollbar(list_container, orient='vertical', command=self.dataset_treeview.yview)
+        dataset_scrollbar_x = ttk.Scrollbar(list_container, orient='horizontal', command=self.dataset_treeview.xview)
+        
+        self.dataset_treeview.configure(yscrollcommand=dataset_scrollbar_y.set, xscrollcommand=dataset_scrollbar_x.set)
+        self.dataset_treeview.bind('<<TreeviewSelect>>', self._on_dataset_select)
+        
+        # Grid layout for treeview and scrollbars
+        self.dataset_treeview.grid(row=0, column=0, sticky='nsew')
+        dataset_scrollbar_y.grid(row=0, column=1, sticky='ns')
+        dataset_scrollbar_x.grid(row=1, column=0, sticky='ew')
+        
+        list_container.grid_rowconfigure(0, weight=1)
+        list_container.grid_columnconfigure(0, weight=1)
+        
+        # === NEW: INLINE TAG EDITOR ===
+        tag_editor_frame = ttk.LabelFrame(self.dataset_list_frame, text="Dataset Tag (Numeric)", padding=5)
+        tag_editor_frame.pack(fill='x', pady=(0,5))
+
+        # Tag entry with label
+        tag_entry_container = ttk.Frame(tag_editor_frame)
+        tag_entry_container.pack(fill='x')
+
+        ttk.Label(tag_entry_container, text="Tag:").pack(side='left', padx=(0,5))
+
+        # Register validation function for float-only input
+        self.validate_float = self.root.register(self._validate_float_input)
+
+        self.tag_entry = ttk.Entry(
+            tag_entry_container, 
+            textvariable=self.current_tag_var,
+            state='disabled',  # Start disabled until dataset is selected
+            validate='key',    # Validate on every keystroke
+            validatecommand=(self.validate_float, '%P')  # %P = new value after keystroke
+        )
+        self.tag_entry.pack(side='left', fill='x', expand=True, padx=(0,5))
+
+        # Bind tag entry events (keep existing bindings)
+        self.current_tag_var.trace('w', self._on_tag_var_change)
+        self.tag_entry.bind('<Return>', self._on_tag_entry_return)
+        self.tag_entry.bind('<FocusOut>', self._on_tag_entry_focusout)
+
+        # Quick save button (keep existing)
+        self.tag_save_btn = ttk.Button(
+            tag_entry_container, 
+            text="💾", 
+            width=3,
+            command=self._save_current_tag,
+            state='disabled'
+        )
+        self.tag_save_btn.pack(side='right')
+        
+        # === COMPACT DATASET INFO ===
+        compact_info_frame = ttk.LabelFrame(self.dataset_list_frame, text="Dataset Info", padding=5)
+        compact_info_frame.pack(fill='x')
+        
+        # Compact info display - single label with key info
+        self.compact_info_label = ttk.Label(
+            compact_info_frame, 
+            text="No datasets loaded", 
+            font=('TkDefaultFont', 8),
+            wraplength=200,  # Allow text wrapping
+            justify='left'
+        )
+        self.compact_info_label.pack(anchor='w', fill='x')
         
         # === PLOT FRAME (Right side) ===
         self.plot_frame = ttk.LabelFrame(self.main_frame, text="Plot", padding=10)
@@ -321,7 +389,97 @@ class MainWindow:
         self.dataset_list_frame.grid(row=0, column=1, sticky='nsew', padx=(0, 5))
         self.plot_frame.grid(row=0, column=2, sticky='nsew')
     
-    # === NEW: ANALYSIS MODE MANAGEMENT METHODS ===
+    # === NEW: TAG EDITING METHODS ===
+    
+    def _on_tag_var_change(self, *args):
+        """Handle tag variable changes (real-time typing)."""
+        if self._updating_tag:
+            return  # Prevent recursive updates
+        
+        # Enable save button when tag is modified
+        active_dataset = self.dataset_manager.get_active_dataset()
+        if active_dataset:
+            current_saved_tag = active_dataset['tag']
+            current_entry_tag = self.current_tag_var.get()
+            
+            # Enable save button if tag has changed
+            if current_entry_tag != current_saved_tag:
+                self.tag_save_btn.config(state='normal')
+            else:
+                self.tag_save_btn.config(state='disabled')
+    
+    def _on_tag_entry_return(self, event):
+        """Handle Enter key in tag entry - save immediately."""
+        self._save_current_tag()
+        self.tag_entry.selection_clear()  # Clear selection after save
+        return 'break'  # Prevent default behavior
+    
+    def _on_tag_entry_focusout(self, event):
+        """Handle focus leaving tag entry - save automatically."""
+        self._save_current_tag()
+    
+    def _save_current_tag(self):
+        """Save the current tag value to the active dataset."""
+        active_dataset = self.dataset_manager.get_active_dataset()
+        if not active_dataset:
+            return
+        
+        tag_str = self.current_tag_var.get().strip()
+        
+        # Validate float input
+        if not tag_str:
+            # Don't allow empty tags - revert to current
+            self._updating_tag = True
+            self.current_tag_var.set(str(active_dataset['tag']))
+            self._updating_tag = False
+            return
+        
+        try:
+            # Convert to float to validate, then store as string representation
+            tag_float = float(tag_str)
+            tag_display = str(tag_float)  # This normalizes the display (e.g., "1.0" instead of "1.")
+            
+            # Only update if tag actually changed
+            if tag_display != str(active_dataset['tag']):
+                self.dataset_manager.update_dataset_tag(active_dataset['id'], tag_display)
+                self._update_dataset_ui()  # Refresh UI to show changes
+                
+                # Visual feedback and update display
+                self.tag_save_btn.config(state='disabled')
+                self._updating_tag = True
+                self.current_tag_var.set(tag_display)  # Update display with normalized format
+                self._updating_tag = False
+                
+                logger.info(f"Updated dataset tag to: {tag_display}")
+                
+        except ValueError:
+            # Invalid float - revert to current tag
+            self._updating_tag = True
+            self.current_tag_var.set(str(active_dataset['tag']))
+            self._updating_tag = False
+            
+            # Show error message
+            messagebox.showerror("Invalid Tag", "Tag must be a valid number (e.g., 1.5, -2.0, 42)")
+
+    
+    def _update_tag_editor(self):
+        """Update the tag editor with the active dataset's tag."""
+        active_dataset = self.dataset_manager.get_active_dataset()
+        
+        self._updating_tag = True  # Prevent recursive updates
+        
+        if active_dataset:
+            self.current_tag_var.set(active_dataset['tag'])
+            self.tag_entry.config(state='normal')
+            self.tag_save_btn.config(state='disabled')  # Start with save disabled
+        else:
+            self.current_tag_var.set("")
+            self.tag_entry.config(state='disabled')
+            self.tag_save_btn.config(state='disabled')
+        
+        self._updating_tag = False
+    
+    # === ANALYSIS MODE MANAGEMENT METHODS ===
     
     def _on_analysis_mode_change(self):
         """Handle analysis mode change (calibration vs verification)."""
@@ -430,89 +588,8 @@ class MainWindow:
             f"Removed {len(to_remove)} dataset(s). Keeping only the active dataset for calibration analysis."
         )
     
-    # === FILE LOADING METHODS (Modified to include analysis mode considerations) ===
+    # === FILE LOADING METHODS ===
     
-    def _load_file_directly(self, file_path):
-        """Load a file directly without preview (fallback method)."""
-        # file_path = filedialog.askopenfilename(
-        #     title="Select CSV file",
-        #     filetypes=SUPPORTED_FILE_TYPES
-        # )
-        
-        # if file_path:
-        try:
-            skip_rows = self.skip_rows_var.get()
-            if skip_rows < 0:
-                skip_rows = 0
-                self.skip_rows_var.set(0)
-            
-            # Create a default tag from filename
-            filename = file_path.split('/')[-1].split('\\')[-1]
-            default_tag = filename.replace('.csv', '').replace('.CSV', '')
-            
-            # Add dataset to manager
-            dataset_id = self.dataset_manager.add_dataset(
-                file_path=file_path,
-                tag=default_tag,
-                notes="",
-                skip_rows=skip_rows
-            )
-            
-            if dataset_id:
-                # Set as active dataset
-                self.dataset_manager.set_active_dataset(dataset_id)
-                
-                # Update UI
-                self._update_dataset_ui()
-                self._load_active_dataset_settings()
-                self._update_column_combos()
-                self._update_stats_display()
-                self.plot_button.config(state='normal')
-                
-                if skip_rows > 0:
-                    messagebox.showinfo("Success", f"Dataset '{default_tag}' loaded successfully!\nSkipped {skip_rows} rows.")
-                else:
-                    messagebox.showinfo("Success", f"Dataset '{default_tag}' loaded successfully!")
-            else:
-                messagebox.showerror("Error", "Failed to load file. Please check the file format.")
-                
-        except ValueError:
-            messagebox.showerror("Error", "Please enter a valid number for rows to skip.")
-
-    def load_multiple_files(self):
-        """Load multiple CSV files using file queue system."""
-        # Check mode restriction first
-        if self.analysis_mode_var.get() == 'calibration':
-            messagebox.showwarning(
-                "Mode Restriction", 
-                "Multiple file loading is only available in Verification mode.\n\n"
-                "Switch to Verification mode to load multiple files for comparison analysis."
-            )
-            return
-        
-        file_paths = filedialog.askopenfilenames(
-            title="Select CSV files",
-            filetypes=SUPPORTED_FILE_TYPES
-        )
-        
-        if file_paths:
-            # Clear any existing queue
-            self.file_queue.clear_queue()
-            
-            # Add files to queue
-            added_count = self.file_queue.add_files(list(file_paths))
-            
-            if added_count > 0:
-                self._update_queue_status()
-                messagebox.showinfo("Files Selected", 
-                                f"Added {added_count} files to processing queue.\n"
-                                f"Click 'Process Queue' to begin loading with preview.")
-                
-                # Start the queue processing workflow
-                self._start_queue_processing()
-            else:
-                messagebox.showerror("Error", "No valid files were added to the queue.")
-
     def smart_load_files(self):
         """Smart file loading that adapts to analysis mode."""
         mode = self.analysis_mode_var.get()
@@ -578,121 +655,39 @@ class MainWindow:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load file: {str(e)}")
 
-
-        """Show dialog to choose between single or multiple file loading - DEBUG VERSION."""
-        choice_dialog = tk.Toplevel(self.root)
-        choice_dialog.title("Load Data Files")
-        choice_dialog.geometry("450x450")  # Made much bigger
-        choice_dialog.grab_set()
-        choice_dialog.resizable(True, True)  # Allow resizing for testing
+    def load_multiple_files(self):
+        """Load multiple CSV files using file queue system."""
+        # Check mode restriction first
+        if self.analysis_mode_var.get() == 'calibration':
+            messagebox.showwarning(
+                "Mode Restriction", 
+                "Multiple file loading is only available in Verification mode.\n\n"
+                "Switch to Verification mode to load multiple files for comparison analysis."
+            )
+            return
         
-        # Center the dialog
-        choice_dialog.transient(self.root)
-        choice_dialog.update_idletasks()
-        x = (choice_dialog.winfo_screenwidth() // 2) - (450 // 2)
-        y = (choice_dialog.winfo_screenheight() // 2) - (450 // 2)
-        choice_dialog.geometry(f"450x450+{x}+{y}")
-        
-        # Main frame
-        main_frame = ttk.Frame(choice_dialog, padding=20)
-        main_frame.pack(fill='both', expand=True)
-        
-        # Title
-        title_label = ttk.Label(
-            main_frame, 
-            text="Choose Loading Method", 
-            font=('TkDefaultFont', 12, 'bold')
-        )
-        title_label.pack(pady=(0, 15))
-        
-        # Description
-        desc_label = ttk.Label(
-            main_frame,
-            text="Verification mode supports both single and multiple file analysis:",
-            font=('TkDefaultFont', 9),
-            foreground='gray'
-        )
-        desc_label.pack(pady=(0, 20))
-        
-        # Button frame
-        button_frame = ttk.Frame(main_frame)
-        button_frame.pack(fill='both', expand=True, pady=10)
-        
-        # === SINGLE FILE SECTION ===
-        single_frame = ttk.LabelFrame(button_frame, text="Single File", padding=15)
-        single_frame.pack(fill='x', pady=(0, 15))  # Increased spacing
-        
-        # Single file description
-        single_desc = ttk.Label(
-            single_frame, 
-            text="Load one CSV file with preview and filtering options",
-            font=('TkDefaultFont', 8),
-            foreground='blue'
-        )
-        single_desc.pack(anchor='w')  # Changed to anchor='w' for left alignment
-        
-        # Single file button
-        single_btn = ttk.Button(
-            single_frame, 
-            text="📄 Load Single File",
-            command=lambda: self._choice_single_file(choice_dialog),
-            width=20  # Added explicit width
-        )
-        single_btn.pack(pady=(10, 0), anchor='w')  # Changed positioning
-        
-        # === MULTIPLE FILES SECTION ===
-        multi_frame = ttk.LabelFrame(button_frame, text="Multiple Files", padding=15)
-        multi_frame.pack(fill='x', pady=(0, 15))  # Added bottom padding
-        
-        # Multiple files description
-        multi_desc = ttk.Label(
-            multi_frame, 
-            text="Load multiple CSV files for comparison analysis",
-            font=('TkDefaultFont', 8),
-            foreground='green'
-        )
-        multi_desc.pack(anchor='w')  # Changed to anchor='w' for left alignment
-        
-        # Multiple files button
-        multi_btn = ttk.Button(
-            multi_frame, 
-            text="📁 Load Multiple Files",
-            command=lambda: self._choice_multiple_files(choice_dialog),
-            width=20  # Added explicit width
-        )
-        multi_btn.pack(pady=(10, 0), anchor='w')  # Changed positioning
-        
-        # === CANCEL BUTTON ===
-        cancel_btn = ttk.Button(
-            main_frame, 
-            text="Cancel", 
-            command=choice_dialog.destroy
-        )
-        cancel_btn.pack(pady=(20, 0))
-        
-        # Set focus and bind escape key
-        choice_dialog.focus_set()
-        choice_dialog.bind('<Escape>', lambda e: choice_dialog.destroy())
-        
-        # Print debug info to console
-        print(f"Dialog created with analysis mode: {self.analysis_mode_var.get()}")
-        print(f"Single frame created: {single_frame}")
-        print(f"Multi frame created: {multi_frame}")
-
-    def preview_file(self):
-        """Preview a CSV file to help identify junk data."""
-        file_path = filedialog.askopenfilename(
-            title="Select CSV file to preview",
+        file_paths = filedialog.askopenfilenames(
+            title="Select CSV files",
             filetypes=SUPPORTED_FILE_TYPES
         )
         
-        if file_path:
-            # Simple callback that doesn't actually load anything
-            def preview_only_callback(file_path, tag, skip_rows):
-                messagebox.showinfo("Preview Only", "File preview completed. No data was loaded.")
+        if file_paths:
+            # Clear any existing queue
+            self.file_queue.clear_queue()
             
-            preview_dialog = FilePreviewDialog(self.root, file_path, preview_only_callback)
-            preview_dialog.show()    
+            # Add files to queue
+            added_count = self.file_queue.add_files(list(file_paths))
+            
+            if added_count > 0:
+                self._update_queue_status()
+                messagebox.showinfo("Files Selected", 
+                                f"Added {added_count} files to processing queue.\n"
+                                f"Click 'Process Queue' to begin loading with preview.")
+                
+                # Start the queue processing workflow
+                self._start_queue_processing()
+            else:
+                messagebox.showerror("Error", "No valid files were added to the queue.")
     
     def generate_random_data(self):
         """Generate random particle data for testing."""
@@ -707,13 +702,11 @@ class MainWindow:
             # Create temporary processor for random data generation
             temp_processor = ParticleDataProcessor()
             if temp_processor.generate_random_data(n, distribution):
-                # Add to dataset manager
-                tag = f"Random {distribution.title()} ({n} points)"
+                # Generate numeric tag based on parameters
+                numeric_tag = str(float(n))  # Use point count as tag
                 notes = f"Generated {distribution} distribution with {n} data points"
                 
-                # We need to save the random data first since DatasetManager expects a file
-                # For now, we'll use a special internal method
-                dataset_id = self._add_generated_dataset(temp_processor, tag, notes)
+                dataset_id = self._add_generated_dataset(temp_processor, numeric_tag, notes)
                 
                 if dataset_id:
                     # Set as active dataset
@@ -726,7 +719,7 @@ class MainWindow:
                     self._update_stats_display()
                     self.plot_button.config(state='normal')
                     self._update_report_button_state()
-                    messagebox.showinfo("Success", f"Generated dataset '{tag}' successfully!")
+                    messagebox.showinfo("Success", f"Generated dataset '{numeric_tag}' successfully!")
                 else:
                     messagebox.showerror("Error", "Failed to add generated data to dataset manager.")
             else:
@@ -734,6 +727,7 @@ class MainWindow:
                 
         except tk.TclError:
             messagebox.showerror("Error", "Please enter a valid number of points.")
+
     
     def _add_generated_dataset(self, data_processor, tag, notes):
         """Add a generated dataset to the dataset manager."""
@@ -781,98 +775,6 @@ class MainWindow:
         except Exception as e:
             logger.error(f"Error adding generated dataset: {e}")
             return None
-    
-    def generate_report(self):
-        """Generate a PDF report with current analysis."""
-        if not REPORTS_AVAILABLE:
-            messagebox.showerror("Error", "ReportLab is not installed. Please install it with: pip install reportlab")
-            return
-        
-        # Check mode restriction
-        if self.analysis_mode_var.get() == 'calibration':
-            messagebox.showwarning(
-                "Mode Restriction", 
-                "Report generation is only available in Verification mode.\n\n"
-                "Switch to Verification mode to generate comprehensive analysis reports."
-            )
-            return
-        
-        if not hasattr(self, 'canvas') or not self.current_figure:
-            messagebox.showerror("Error", "Please create a plot first before generating a report.")
-            return
-        
-        active_dataset = self.dataset_manager.get_active_dataset()
-        if not active_dataset:
-            messagebox.showerror("Error", "No active dataset for report generation.")
-            return
-        
-        # Get save location from user
-        file_path = filedialog.asksaveasfilename(
-            title="Save Report As",
-            defaultextension=".pdf",
-            filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")]
-        )
-        
-        if not file_path:
-            return  # User cancelled
-        
-        try:
-            # Collect current analysis data
-            data_stats = active_dataset['data_processor'].get_data_stats()
-            
-            # Collect analysis parameters (including mode information)
-            analysis_params = {
-                'analysis_mode': self.analysis_mode_var.get(),  # NEW: Include analysis mode
-                'data_mode': self.data_mode_var.get(),
-                'bin_count': self.bin_count_var.get(),
-                'size_column': self.size_column_var.get(),
-                'frequency_column': self.frequency_column_var.get(),
-                'skip_rows': active_dataset['skip_rows'],
-                'show_stats_lines': self.show_stats_lines_var.get()
-            }
-            
-            # File information
-            file_info = {
-                'filename': active_dataset['filename'],
-                'dataset_tag': active_dataset['tag'],
-                'dataset_notes': active_dataset['notes'],
-                'generated_at': self._get_current_timestamp()
-            }
-            
-            # Generate the report
-            success = self.report_template.create_report(
-                output_path=file_path,
-                plot_figure=self.current_figure,
-                data_stats=data_stats,
-                analysis_params=analysis_params,
-                file_info=file_info
-            )
-            
-            if success:
-                messagebox.showinfo("Success", f"Report generated successfully!\nSaved to: {file_path}")
-            else:
-                messagebox.showerror("Error", "Failed to generate report. Check console for details.")
-                
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to generate report: {str(e)}")
-    
-    # === UPDATED EXISTING METHODS ===
-    
-    def _update_report_button_state(self):
-        """Update the report button state based on available data, plot, and mode."""
-        self._update_report_button_state_for_mode()
-    
-    def _update_navigation_buttons(self):
-        """Update the state of navigation and action buttons."""
-        has_datasets = self.dataset_manager.has_datasets()
-        
-        # Mode-aware navigation button updates
-        self._update_navigation_buttons_for_mode()
-        
-        # Action buttons (not mode-dependent)
-        self.edit_tag_btn.config(state='normal' if has_datasets else 'disabled')
-        self.edit_notes_btn.config(state='normal' if has_datasets else 'disabled')
-        self.remove_dataset_btn.config(state='normal' if has_datasets else 'disabled')
     
     # === FILE QUEUE PROCESSING METHODS ===
     
@@ -929,114 +831,141 @@ class MainWindow:
         self._show_enhanced_queue_preview_dialog(preview_data, file_info)
 
     def _show_enhanced_queue_preview_dialog(self, preview_data, file_info):
-        """Show enhanced preview dialog for queue processing."""
-        preview_window = tk.Toplevel(self.root)
-        preview_window.title(f"Queue Preview - {file_info['filename']}")
-        preview_window.geometry("950x800")
-        preview_window.grab_set()  # Make it modal
-        
-        # Queue progress header
-        queue_info = self.file_queue.get_current_file_info()
-        progress_frame = ttk.LabelFrame(preview_window, text="Queue Progress", padding=5)
-        progress_frame.pack(fill='x', padx=10, pady=5)
-        
-        progress_text = f"File {queue_info['current_index'] + 1} of {queue_info['total_files']}"
-        if queue_info['processed_count'] > 0:
-            progress_text += f" | Processed: {queue_info['processed_count']}"
-        if queue_info['failed_count'] > 0:
-            progress_text += f" | Failed: {queue_info['failed_count']}"
-        if queue_info['skipped_count'] > 0:
-            progress_text += f" | Skipped: {queue_info['skipped_count']}"
-        
-        ttk.Label(progress_frame, text=progress_text, font=('TkDefaultFont', 10, 'bold')).pack(anchor='w')
-        
-        # File info header
-        info_frame = ttk.LabelFrame(preview_window, text="Current File Information", padding=5)
-        info_frame.pack(fill='x', padx=10, pady=5)
-        
-        ttk.Label(info_frame, text=f"File: {file_info['filename']}", font=('TkDefaultFont', 9, 'bold')).pack(anchor='w')
-        ttk.Label(info_frame, text=f"Auto Tag: {file_info['auto_tag']}").pack(anchor='w')
-        ttk.Label(info_frame, text=f"Total lines: {preview_data['total_lines']}").pack(anchor='w')
-        ttk.Label(info_frame, text=f"Detected columns: {preview_data['detected_columns']}").pack(anchor='w')
-        
-        # Tag editing
-        tag_frame = ttk.Frame(info_frame)
-        tag_frame.pack(fill='x', pady=5)
-        
-        ttk.Label(tag_frame, text="Dataset Tag:").grid(row=0, column=0, sticky='w', padx=(0,5))
-        tag_var = tk.StringVar(value=file_info['auto_tag'])
-        tag_entry = ttk.Entry(tag_frame, textvariable=tag_var, width=30)
-        tag_entry.grid(row=0, column=1, sticky='ew', padx=5)
-        tag_frame.columnconfigure(1, weight=1)
-        
-        # Preview text section (simplified for brevity)
-        preview_section = ttk.LabelFrame(preview_window, text="File Preview", padding=5)
-        preview_section.pack(fill='both', expand=True, padx=10, pady=5)
-        
-        preview_text = tk.Text(preview_section, wrap='none', font=('Courier', 9), height=15)
-        scrollbar = ttk.Scrollbar(preview_section, orient='vertical', command=preview_text.yview)
-        preview_text.configure(yscrollcommand=scrollbar.set)
-        
-        preview_text.pack(side='left', fill='both', expand=True)
-        scrollbar.pack(side='right', fill='y')
-        
-        # Add preview content
-        for i, line in enumerate(preview_data['preview_lines']):
-            preview_text.insert(tk.END, f"{i:3d}: {line}\n")
-        preview_text.config(state='disabled')
-        
-        # Filter controls
-        filter_frame = ttk.LabelFrame(preview_window, text="Data Filtering Options", padding=10)
-        filter_frame.pack(fill='x', padx=10, pady=5)
-        
-        filter_row = ttk.Frame(filter_frame)
-        filter_row.pack(fill='x')
-        
-        ttk.Label(filter_row, text="Skip rows from top:").grid(row=0, column=0, sticky='w')
-        skip_var = tk.IntVar(value=file_info['skip_rows'])
-        skip_entry = ttk.Entry(filter_row, textvariable=skip_var, width=6)
-        skip_entry.grid(row=0, column=1, padx=10)
-        
-        # Buttons
-        button_frame = ttk.Frame(preview_window)
-        button_frame.pack(fill='x', padx=10, pady=10)
-        
-        def load_current_file():
-            try:
-                skip_rows = skip_var.get()
-                if skip_rows < 0:
-                    skip_rows = 0
-                
-                dataset_tag = tag_var.get().strip() or file_info['auto_tag']
-                
-                # Update file queue with settings
-                self.file_queue.update_current_file(
-                    skip_rows=skip_rows,
-                    auto_tag=dataset_tag
-                )
-                
+            """Show enhanced preview dialog for queue processing."""
+            # Create the dialog window (this was missing the local variable assignment!)
+            preview_window = tk.Toplevel(self.root)
+            preview_window.title(f"Queue Preview - {file_info['filename']}")
+            preview_window.geometry("950x800")
+            preview_window.grab_set()  # Make it modal
+            
+            # Queue progress header
+            queue_info = self.file_queue.get_current_file_info()
+            progress_frame = ttk.LabelFrame(preview_window, text="Queue Progress", padding=5)
+            progress_frame.pack(fill='x', padx=10, pady=5)
+            
+            progress_text = f"File {queue_info['current_index'] + 1} of {queue_info['total_files']}"
+            if queue_info['processed_count'] > 0:
+                progress_text += f" | Processed: {queue_info['processed_count']}"
+            if queue_info['failed_count'] > 0:
+                progress_text += f" | Failed: {queue_info['failed_count']}"
+            if queue_info['skipped_count'] > 0:
+                progress_text += f" | Skipped: {queue_info['skipped_count']}"
+            
+            ttk.Label(progress_frame, text=progress_text, font=('TkDefaultFont', 10, 'bold')).pack(anchor='w')
+            
+            # File info header (NO TAG EDITING HERE - moved to filtering section)
+            info_frame = ttk.LabelFrame(preview_window, text="Current File Information", padding=5)
+            info_frame.pack(fill='x', padx=10, pady=5)
+            
+            ttk.Label(info_frame, text=f"File: {file_info['filename']}", font=('TkDefaultFont', 9, 'bold')).pack(anchor='w')
+            ttk.Label(info_frame, text=f"Total lines: {preview_data['total_lines']}").pack(anchor='w')
+            ttk.Label(info_frame, text=f"Detected columns: {preview_data['detected_columns']}").pack(anchor='w')
+            
+            # Preview text section
+            preview_section = ttk.LabelFrame(preview_window, text="File Preview", padding=5)
+            preview_section.pack(fill='both', expand=True, padx=10, pady=5)
+            
+            preview_text = tk.Text(preview_section, wrap='none', font=('Courier', 9), height=15)
+            scrollbar = ttk.Scrollbar(preview_section, orient='vertical', command=preview_text.yview)
+            preview_text.configure(yscrollcommand=scrollbar.set)
+            
+            preview_text.pack(side='left', fill='both', expand=True)
+            scrollbar.pack(side='right', fill='y')
+            
+            # Add preview content
+            for i, line in enumerate(preview_data['preview_lines']):
+                preview_text.insert(tk.END, f"{i:3d}: {line}\n")
+            preview_text.config(state='disabled')
+            
+            # Filter controls section (MOVED TAG EDITING HERE to match single-file dialog)
+            filter_frame = ttk.LabelFrame(preview_window, text="Data Filtering Options", padding=10)
+            filter_frame.pack(fill='x', padx=10, pady=5)
+            
+            # Create filter_row container like in single-file dialog
+            filter_row = ttk.Frame(filter_frame)
+            filter_row.pack(fill='x')
+            
+            # Tag editing with float validation (repositioned to match single-file layout)
+            ttk.Label(filter_row, text="Dataset Tag (Numeric):").grid(row=0, column=0, sticky='w', padx=(0,5))
+            tag_var = tk.StringVar(value=file_info['auto_tag'])
+            
+            # Register validation function for this dialog
+            validate_float = preview_window.register(self._validate_float_input_for_dialog)
+            
+            tag_entry = ttk.Entry(
+                filter_row, 
+                textvariable=tag_var, 
+                width=30,
+                validate='key',
+                validatecommand=(validate_float, '%P')
+            )
+            tag_entry.grid(row=0, column=1, sticky='w', padx=5)
+            
+            # Skip rows control (moved to same row structure)
+            ttk.Label(filter_row, text="Skip rows from top:").grid(row=1, column=0, sticky='w', pady=(10,0), padx=(0,5))
+            skip_var = tk.IntVar(value=file_info['skip_rows'])
+            skip_entry = ttk.Entry(filter_row, textvariable=skip_var, width=6)
+            skip_entry.grid(row=1, column=1, sticky='w', padx=5, pady=(10,0))
+            
+            # Add hint text like in single-file dialog
+            skip_hint_label = ttk.Label(
+                filter_row, 
+                text="(Use this to skip headers, metadata, or junk data)", 
+                font=('TkDefaultFont', 8)
+            )
+            skip_hint_label.grid(row=1, column=2, sticky='w', padx=(10,0), pady=(10,0))
+            
+            # Buttons
+            button_frame = ttk.Frame(preview_window)
+            button_frame.pack(fill='x', padx=10, pady=10)
+            
+            def load_current_file():
+                try:
+                    skip_rows = skip_var.get()
+                    if skip_rows < 0:
+                        skip_rows = 0
+                    
+                    tag_str = tag_var.get().strip()
+                    if not tag_str:
+                        messagebox.showerror("Error", "Please enter a numeric dataset tag.")
+                        return
+                    
+                    # Validate float
+                    try:
+                        tag_float = float(tag_str)
+                        normalized_tag = str(tag_float)
+                    except ValueError:
+                        messagebox.showerror("Error", "Tag must be a valid number (e.g., 1.5, -2.0, 42)")
+                        return
+                    
+                    # Update file queue with settings
+                    self.file_queue.update_current_file(
+                        skip_rows=skip_rows,
+                        auto_tag=normalized_tag
+                    )
+                    
+                    preview_window.destroy()
+                    self._load_current_queue_file(file_info['file_path'], normalized_tag, skip_rows)
+                    
+                except tk.TclError:
+                    messagebox.showerror("Error", "Please enter a valid number for rows to skip.")
+            
+            def skip_current_file():
+                self.file_queue.skip_current_file("User skipped during preview")
                 preview_window.destroy()
-                self._load_current_queue_file(file_info['file_path'], dataset_tag, skip_rows)
-                
-            except tk.TclError:
-                messagebox.showerror("Error", "Please enter a valid number for rows to skip.")
-        
-        def skip_current_file():
-            self.file_queue.skip_current_file("User skipped during preview")
-            preview_window.destroy()
-            self._process_current_queue_file()
-        
-        def cancel_queue():
-            preview_window.destroy()
-            self._cancel_queue_processing()
-        
-        ttk.Button(button_frame, text="📁 Load This File", command=load_current_file).pack(side='left', padx=5)
-        ttk.Button(button_frame, text="⏭️ Skip This File", command=skip_current_file).pack(side='left', padx=5)
-        ttk.Button(button_frame, text="❌ Cancel Queue", command=cancel_queue).pack(side='left', padx=5)
-        
-        tag_entry.focus_set()
-        tag_entry.select_range(0, tk.END)
-
+                self._process_current_queue_file()
+            
+            def cancel_queue():
+                preview_window.destroy()
+                self._cancel_queue_processing()
+            
+            ttk.Button(button_frame, text="📁 Load This File", command=load_current_file).pack(side='left', padx=5)
+            ttk.Button(button_frame, text="⏭️ Skip This File", command=skip_current_file).pack(side='left', padx=5)
+            ttk.Button(button_frame, text="❌ Cancel Queue", command=cancel_queue).pack(side='left', padx=5)
+            
+            tag_entry.focus_set()
+            tag_entry.select_range(0, tk.END)
+            
     def _load_current_queue_file(self, file_path, dataset_tag, skip_rows):
         """Load the current queue file as a dataset."""
         try:
@@ -1127,62 +1056,122 @@ class MainWindow:
         else:
             self.queue_status_label.config(text=f"Queue ready: {info['total_files']} files")
     
-    # === DATASET MANAGEMENT METHODS ===
+    # === UPDATED DATASET MANAGEMENT METHODS ===
     
     def _update_dataset_ui(self):
         """Update all dataset-related UI elements."""
-        self._update_dataset_listbox()
-        self._update_dataset_info()
+        self._update_dataset_treeview()  # Changed from _update_dataset_listbox
+        self._update_compact_dataset_info()  # Updated method name
         self._update_navigation_buttons()
+        self._update_tag_editor()  # NEW: Update tag editor
     
-    def _update_dataset_listbox(self):
-        """Update the dataset listbox with current datasets."""
-        self.dataset_listbox.delete(0, tk.END)
+    def _update_dataset_treeview(self):
+        """Update the dataset treeview with current datasets."""
+        # Clear existing items
+        for item in self.dataset_treeview.get_children():
+            self.dataset_treeview.delete(item)
         
         datasets = self.dataset_manager.get_all_datasets()
         active_id = self.dataset_manager.active_dataset_id
         
         for i, dataset in enumerate(datasets):
+            # Determine filename display
             if dataset['filename'] != 'Generated Data':
-                display_text = f"● [{dataset['tag']}] - {dataset['filename']}"
+                filename_display = dataset['filename']
             else:
-                display_text = f"● [{dataset['tag']}] - Generated"
+                filename_display = "Generated Data"
             
-            self.dataset_listbox.insert(tk.END, display_text)
+            # Insert item with tag and filename in separate columns
+            item_id = self.dataset_treeview.insert(
+                '', 'end',
+                text='●',  # Bullet point in the tree column
+                values=(dataset['tag'], filename_display),
+                tags=('dataset',)
+            )
             
+            # Select and show active dataset
             if dataset['id'] == active_id:
-                self.dataset_listbox.selection_set(i)
-                self.dataset_listbox.see(i)
+                self.dataset_treeview.selection_set(item_id)
+                self.dataset_treeview.see(item_id)
+        
+        # Configure tag styling
+        self.dataset_treeview.tag_configure('dataset', foreground='black')
     
-    def _update_dataset_info(self):
-        """Update the dataset info display."""
+    def _update_compact_dataset_info(self):
+        """Update the compact dataset info display."""
         active_dataset = self.dataset_manager.get_active_dataset()
         
         if active_dataset:
-            info_text = f"Active: {active_dataset['tag']}"
-            if active_dataset['notes']:
-                info_text += f"\nNotes: {active_dataset['notes'][:50]}..."
+            # Build compact info string
+            info_parts = []
             
-            self.dataset_info_label.config(text=info_text)
+            # Filename
+            if active_dataset['filename'] != 'Generated Data':
+                info_parts.append(f"File: {active_dataset['filename']}")
+            else:
+                info_parts.append("File: Generated Data")
+            
+            # Notes preview (first 50 chars if present)
+            if active_dataset['notes']:
+                notes_preview = active_dataset['notes'][:50]
+                if len(active_dataset['notes']) > 50:
+                    notes_preview += "..."
+                info_parts.append(f"Notes: {notes_preview}")
+            
+            # Data counts
+            stats = active_dataset['data_processor'].get_data_stats()
+            if 'total_rows' in stats:
+                info_parts.append(f"Rows: {stats['total_rows']}")
+            
+            info_text = "\n".join(info_parts)
+            self.compact_info_label.config(text=info_text)
         else:
-            self.dataset_info_label.config(text="No datasets loaded")
+            self.compact_info_label.config(text="No datasets loaded")
+    
+    def _update_navigation_buttons(self):
+        """Update the state of navigation and action buttons."""
+        has_datasets = self.dataset_manager.has_datasets()
+        
+        # Mode-aware navigation button updates
+        self._update_navigation_buttons_for_mode()
+        
+        # Action buttons (removed edit_tag_btn since we have inline editing)
+        self.edit_notes_btn.config(state='normal' if has_datasets else 'disabled')
+        self.remove_dataset_btn.config(state='normal' if has_datasets else 'disabled')
     
     def _on_dataset_select(self, event):
-        """Handle dataset selection from listbox."""
-        selection = self.dataset_listbox.curselection()
+        """Handle dataset selection from treeview."""
+        selection = self.dataset_treeview.selection()  # ✅ Use treeview selection
         if selection:
+            # Get the selected item
+            selected_item = selection[0]
+            
+            # Get all datasets and find the matching one by index
             datasets = self.dataset_manager.get_all_datasets()
-            if selection[0] < len(datasets):
-                selected_dataset = datasets[selection[0]]
-                self.dataset_manager.set_active_dataset(selected_dataset['id'])
+            
+            # Get the index of the selected item in the treeview
+            all_items = self.dataset_treeview.get_children()
+            try:
+                selected_index = all_items.index(selected_item)
                 
-                self._load_active_dataset_settings()
-                self._update_dataset_info()
-                self._update_column_combos()
-                self._update_stats_display()
-                
-                if hasattr(self, 'canvas') and self.dataset_manager.get_active_dataset():
-                    self._update_plot()
+                if selected_index < len(datasets):
+                    selected_dataset = datasets[selected_index]
+                    self.dataset_manager.set_active_dataset(selected_dataset['id'])
+                    
+                    self._load_active_dataset_settings()
+                    self._update_compact_dataset_info()
+                    self._update_tag_editor()  # Update tag editor when selection changes
+                    self._update_column_combos()
+                    self._update_stats_display()
+                    
+                    # Update plot if canvas exists and we have data
+                    if hasattr(self, 'canvas') and self.dataset_manager.get_active_dataset():
+                        self._update_plot()
+            
+            except (ValueError, IndexError) as e:
+                logger.error(f"Error handling dataset selection: {e}")
+                # Optionally show user-friendly error message
+
     
     def previous_dataset(self):
         """Navigate to previous dataset."""
@@ -1209,22 +1198,6 @@ class MainWindow:
             
             if hasattr(self, 'canvas'):
                 self._update_plot()
-    
-    def edit_dataset_tag(self):
-        """Edit the tag of the active dataset."""
-        active_dataset = self.dataset_manager.get_active_dataset()
-        if not active_dataset:
-            return
-        
-        new_tag = simpledialog.askstring(
-            "Edit Dataset Tag",
-            "Enter new tag:",
-            initialvalue=active_dataset['tag']
-        )
-        
-        if new_tag and new_tag.strip():
-            self.dataset_manager.update_dataset_tag(active_dataset['id'], new_tag.strip())
-            self._update_dataset_ui()
     
     def edit_dataset_notes(self):
         """Edit the notes of the active dataset."""
@@ -1316,6 +1289,13 @@ class MainWindow:
         # Clear stats
         self.stats_text.delete(1.0, tk.END)
         self.stats_text.insert(1.0, "No datasets loaded")
+        
+        # Clear tag editor
+        self._update_tag_editor()
+        
+        # Clear treeview
+        for item in self.dataset_treeview.get_children():
+            self.dataset_treeview.delete(item)
         
         # Disable plot button
         self.plot_button.config(state='disabled')
@@ -1420,11 +1400,6 @@ class MainWindow:
         # Update plot if one exists
         if hasattr(self, 'canvas'):
             self._update_plot()
-    
-    def _get_current_timestamp(self):
-        """Get current timestamp for report."""
-        from datetime import datetime
-        return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     def _update_data_mode_ui(self):
         """Update UI elements based on current data mode."""
@@ -1665,6 +1640,120 @@ class MainWindow:
         # Add toolbar
         toolbar = NavigationToolbar2Tk(self.canvas, self.plot_frame)
         toolbar.update()
+    
+    def _validate_float_input(self, value_if_allowed):
+        """
+        Validate that input is a valid float or empty.
+        
+        Args:
+            value_if_allowed: The value that would be in the entry if the keystroke is allowed
+            
+        Returns:
+            bool: True if input is valid, False otherwise
+        """
+        if value_if_allowed == "":
+            return True  # Allow empty string (for clearing)
+        
+        # Allow negative sign at the beginning
+        if value_if_allowed == "-":
+            return True
+        
+        # Allow single decimal point
+        if value_if_allowed.count('.') <= 1:
+            try:
+                float(value_if_allowed)
+                return True
+            except ValueError:
+                return False
+        
+        return False
+
+    def _validate_float_input_for_dialog(self, value_if_allowed):
+        """Validate float input for dialog contexts (same as main validation)."""
+        return self._validate_float_input(value_if_allowed)
+
+    def generate_report(self):
+        """Generate a PDF report with current analysis."""
+        if not REPORTS_AVAILABLE:
+            messagebox.showerror("Error", "ReportLab is not installed. Please install it with: pip install reportlab")
+            return
+        
+        # Check mode restriction
+        if self.analysis_mode_var.get() == 'calibration':
+            messagebox.showwarning(
+                "Mode Restriction", 
+                "Report generation is only available in Verification mode.\n\n"
+                "Switch to Verification mode to generate comprehensive analysis reports."
+            )
+            return
+        
+        if not hasattr(self, 'canvas') or not self.current_figure:
+            messagebox.showerror("Error", "Please create a plot first before generating a report.")
+            return
+        
+        active_dataset = self.dataset_manager.get_active_dataset()
+        if not active_dataset:
+            messagebox.showerror("Error", "No active dataset for report generation.")
+            return
+        
+        # Get save location from user
+        file_path = filedialog.asksaveasfilename(
+            title="Save Report As",
+            defaultextension=".pdf",
+            filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")]
+        )
+        
+        if not file_path:
+            return  # User cancelled
+        
+        try:
+            # Collect current analysis data
+            data_stats = active_dataset['data_processor'].get_data_stats()
+            
+            # Collect analysis parameters (including mode information)
+            analysis_params = {
+                'analysis_mode': self.analysis_mode_var.get(),
+                'data_mode': self.data_mode_var.get(),
+                'bin_count': self.bin_count_var.get(),
+                'size_column': self.size_column_var.get(),
+                'frequency_column': self.frequency_column_var.get(),
+                'skip_rows': active_dataset['skip_rows'],
+                'show_stats_lines': self.show_stats_lines_var.get()
+            }
+            
+            # File information
+            file_info = {
+                'filename': active_dataset['filename'],
+                'dataset_tag': active_dataset['tag'],
+                'dataset_notes': active_dataset['notes'],
+                'generated_at': self._get_current_timestamp()
+            }
+            
+            # Generate the report
+            success = self.report_template.create_report(
+                output_path=file_path,
+                plot_figure=self.current_figure,
+                data_stats=data_stats,
+                analysis_params=analysis_params,
+                file_info=file_info
+            )
+            
+            if success:
+                messagebox.showinfo("Success", f"Report generated successfully!\nSaved to: {file_path}")
+            else:
+                messagebox.showerror("Error", "Failed to generate report. Check console for details.")
+                
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to generate report: {str(e)}")
+    
+    def _get_current_timestamp(self):
+        """Get current timestamp for report."""
+        from datetime import datetime
+        return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    def _update_report_button_state(self):
+        """Update the report button state based on available data, plot, and mode."""
+        self._update_report_button_state_for_mode()
     
     def _on_closing(self):
         """Handle application closing cleanly."""

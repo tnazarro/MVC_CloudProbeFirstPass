@@ -125,13 +125,24 @@ class FilePreviewDialog:
         self.filter_frame = ttk.LabelFrame(self.dialog, text="Data Filtering Options", padding=10)
         self.filter_row = ttk.Frame(self.filter_frame)
         
-        # Default tag from filename
+        # Generate numeric tag from filename (improved logic)
         filename = self.file_path.split('/')[-1].split('\\')[-1]
-        default_tag = filename.replace('.csv', '').replace('.CSV', '')
+        default_tag = self._generate_auto_numeric_tag(filename)
         
-        self.tag_label = ttk.Label(self.filter_row, text="Dataset Tag:")
+        self.tag_label = ttk.Label(self.filter_row, text="Dataset Tag (Numeric):")
         self.tag_var = tk.StringVar(value=default_tag)
-        self.tag_entry = ttk.Entry(self.filter_row, textvariable=self.tag_var, width=30)
+        
+        # Register float validation function
+        self.validate_float = self.dialog.register(self._validate_float_input)
+        
+        # Create tag entry with float validation
+        self.tag_entry = ttk.Entry(
+            self.filter_row, 
+            textvariable=self.tag_var, 
+            width=30,
+            validate='key',
+            validatecommand=(self.validate_float, '%P')
+        )
         
         self.skip_label = ttk.Label(self.filter_row, text="Skip rows from top:")
         self.skip_var = tk.IntVar(value=0)
@@ -252,25 +263,82 @@ class FilePreviewDialog:
                 
         except tk.TclError:
             messagebox.showerror("Error", "Please enter a valid number of lines to preview.")
+
+    def _validate_float_input(self, value_if_allowed):
+        """
+        Validate that input is a valid float or empty.
+        
+        Args:
+            value_if_allowed: The value that would be in the entry if the keystroke is allowed
             
+        Returns:
+            bool: True if input is valid, False otherwise
+        """
+        if value_if_allowed == "":
+            return True  # Allow empty string (for clearing)
+        
+        # Allow negative sign at the beginning
+        if value_if_allowed == "-":
+            return True
+        
+        # Allow single decimal point
+        if value_if_allowed.count('.') <= 1:
+            try:
+                float(value_if_allowed)
+                return True
+            except ValueError:
+                return False
+        
+        return False
+
+    def _generate_auto_numeric_tag(self, filename: str) -> str:
+        """Generate a numeric tag from filename or use default."""
+        import re
+        from pathlib import Path
+        
+        # Remove extension
+        base_name = Path(filename).stem
+        
+        # Try to extract numbers from filename
+        numbers = re.findall(r'-?\d+\.?\d*', base_name)
+        
+        if numbers:
+            try:
+                # Use the first number found
+                return str(float(numbers[0]))
+            except ValueError:
+                pass
+        
+        # Default to 1.0 if no number found
+        return "1.0"
+
     def _on_load(self) -> None:
-        """Handle the load button click."""
+        """Handle the load button click with float validation."""
         try:
             skip_rows = self.skip_var.get()
             if skip_rows < 0:
                 skip_rows = 0
                 
-            tag = self.tag_var.get().strip()
-            if not tag:
-                messagebox.showerror("Error", "Please enter a dataset tag.")
+            tag_str = self.tag_var.get().strip()
+            if not tag_str:
+                messagebox.showerror("Error", "Please enter a numeric dataset tag.")
+                return
+            
+            # Validate float
+            try:
+                tag_float = float(tag_str)
+                normalized_tag = str(tag_float)  # Normalize the display
+            except ValueError:
+                messagebox.showerror("Error", "Tag must be a valid number (e.g., 1.5, -2.0, 42)")
                 return
             
             # Close dialog and call the callback
             self.dialog.destroy()
-            self.on_load_callback(self.file_path, tag, skip_rows)
+            self.on_load_callback(self.file_path, normalized_tag, skip_rows)
             
         except tk.TclError:
             messagebox.showerror("Error", "Please enter a valid number for rows to skip.")
+
             
     def _on_cancel(self) -> None:
         """Handle the cancel button click or dialog close."""
