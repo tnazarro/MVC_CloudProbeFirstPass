@@ -17,7 +17,7 @@ class ParticleDataProcessor:
         self.data = None
         self.size_column = None
         self.frequency_column = None
-        self.data_mode = "pre_aggregated"  # "pre_aggregated" or "raw_measurements"
+        self.data_mode = "raw_measurements"  # "pre_aggregated" or "raw_measurements"
     
     def load_csv(self, file_path: str, skip_rows: int = 0) -> bool:
         """
