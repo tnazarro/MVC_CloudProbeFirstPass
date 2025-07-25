@@ -292,7 +292,7 @@ class MainWindow:
         
         # Configure columns
         self.dataset_treeview.heading('#0', text='')  # Hide the tree column header
-        self.dataset_treeview.heading('tag', text='Tag')
+        self.dataset_treeview.heading('tag', text='Bead Size (μm)')
         self.dataset_treeview.heading('filename', text='Filename')
         
         # Set column widths
@@ -316,14 +316,14 @@ class MainWindow:
         list_container.grid_columnconfigure(0, weight=1)
         
         # === NEW: INLINE TAG EDITOR ===
-        tag_editor_frame = ttk.LabelFrame(self.dataset_list_frame, text="Dataset Tag (Numeric)", padding=5)
+        tag_editor_frame = ttk.LabelFrame(self.dataset_list_frame, text="Bead Size (μm)", padding=5)
         tag_editor_frame.pack(fill='x', pady=(0,5))
 
         # Tag entry with label
         tag_entry_container = ttk.Frame(tag_editor_frame)
         tag_entry_container.pack(fill='x')
 
-        ttk.Label(tag_entry_container, text="Tag:").pack(side='left', padx=(0,5))
+        ttk.Label(tag_entry_container, text="Bead Size (μm):").pack(side='left', padx=(0,5))
 
         # Register validation function for float-only input
         self.validate_float = self.root.register(self._validate_float_input)
@@ -454,7 +454,7 @@ class MainWindow:
             self._updating_tag = False
             
             # Show error message
-            messagebox.showerror("Invalid Tag", "Tag must be a valid number (e.g., 1.5, -2.0, 42)")
+            messagebox.showerror("Invalid Bead Size", "Bead size must be a valid number (e.g., 1.5, -2.0, 42)")
 
     
     def _update_tag_editor(self):
@@ -881,7 +881,7 @@ class MainWindow:
             filter_row.pack(fill='x')
             
             # Tag editing with float validation (repositioned to match single-file layout)
-            ttk.Label(filter_row, text="Dataset Tag (Numeric):").grid(row=0, column=0, sticky='w', padx=(0,5))
+            ttk.Label(filter_row, text="Bead Size (μm):").grid(row=0, column=0, sticky='w', padx=(0,5))
             tag_var = tk.StringVar(value=file_info['auto_tag'])
             
             # Register validation function for this dialog
@@ -922,7 +922,7 @@ class MainWindow:
                     
                     tag_str = tag_var.get().strip()
                     if not tag_str:
-                        messagebox.showerror("Error", "Please enter a numeric dataset tag.")
+                        messagebox.showerror("Error", "Please enter a numeric bead size value.")
                         return
                     
                     # Validate float
@@ -930,7 +930,7 @@ class MainWindow:
                         tag_float = float(tag_str)
                         normalized_tag = str(tag_float)
                     except ValueError:
-                        messagebox.showerror("Error", "Tag must be a valid number (e.g., 1.5, -2.0, 42)")
+                        messagebox.showerror("Error", "Bead size must be a valid number (e.g., 1.5, -2.0, 42)")
                         return
                     
                     # Update file queue with settings
