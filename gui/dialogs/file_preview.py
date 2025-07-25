@@ -129,7 +129,7 @@ class FilePreviewDialog:
         filename = self.file_path.split('/')[-1].split('\\')[-1]
         default_tag = self._generate_auto_numeric_tag(filename)
         
-        self.tag_label = ttk.Label(self.filter_row, text="Dataset Tag (Numeric):")
+        self.tag_label = ttk.Label(self.filter_row, text="Bead Size (μm):")
         self.tag_var = tk.StringVar(value=default_tag)
         
         # Register float validation function
@@ -321,7 +321,7 @@ class FilePreviewDialog:
                 
             tag_str = self.tag_var.get().strip()
             if not tag_str:
-                messagebox.showerror("Error", "Please enter a numeric dataset tag.")
+                messagebox.showerror("Error", "Please enter a numeric bead size value.")
                 return
             
             # Validate float
@@ -329,7 +329,7 @@ class FilePreviewDialog:
                 tag_float = float(tag_str)
                 normalized_tag = str(tag_float)  # Normalize the display
             except ValueError:
-                messagebox.showerror("Error", "Tag must be a valid number (e.g., 1.5, -2.0, 42)")
+                messagebox.showerror("Error", "Bead size must be a valid number (e.g., 1.5, -2.0, 42)")
                 return
             
             # Close dialog and call the callback
