@@ -27,6 +27,68 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+
+class ScrollableFrame(ttk.Frame):
+    """A scrollable frame that can contain other widgets."""
+    
+    def __init__(self, parent, *args, **kwargs):
+        super().__init__(parent, *args, **kwargs)
+        
+        # Create canvas and scrollbars
+        self.canvas = tk.Canvas(self, highlightthickness=0)
+        self.v_scrollbar = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
+        self.h_scrollbar = ttk.Scrollbar(self, orient="horizontal", command=self.canvas.xview)
+        
+        # Create the scrollable frame
+        self.scrollable_frame = ttk.Frame(self.canvas)
+        
+        # Configure canvas
+        self.canvas.configure(yscrollcommand=self.v_scrollbar.set,
+                            xscrollcommand=self.h_scrollbar.set)
+        
+        # Layout scrollbars and canvas
+        self.canvas.grid(row=0, column=0, sticky="nsew")
+        self.v_scrollbar.grid(row=0, column=1, sticky="ns")
+        self.h_scrollbar.grid(row=1, column=0, sticky="ew")
+        
+        # Configure grid weights
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+        
+        # Create window in canvas
+        self.canvas_window = self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+        
+        # Bind events
+        self.scrollable_frame.bind("<Configure>", self._on_frame_configure)
+        self.canvas.bind("<Configure>", self._on_canvas_configure)
+        self.bind_all("<MouseWheel>", self._on_mousewheel)
+
+    def update_scroll_region(self):
+        """Manually update the scroll region - useful when content changes."""
+        self.canvas.update_idletasks()  # Make sure all pending layout updates are processed
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+
+    def _on_frame_configure(self, event):
+        """Update scroll region when frame size changes."""
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        
+    def _on_canvas_configure(self, event):
+        """Update canvas window size when canvas size changes."""
+        canvas_width = event.width
+        frame_width = self.scrollable_frame.winfo_reqwidth()
+        
+        if frame_width < canvas_width:
+            # Frame is smaller than canvas, center it
+            self.canvas.itemconfig(self.canvas_window, width=canvas_width)
+        else:
+            # Frame is larger than canvas, use frame width
+            self.canvas.itemconfig(self.canvas_window, width=frame_width)
+            
+    def _on_mousewheel(self, event):
+        """Handle mouse wheel scrolling."""
+        self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+
 class MainWindow:
     """Main application window with dataset management and analysis mode selection."""
     
@@ -35,9 +97,15 @@ class MainWindow:
         self.root.title("Particle Data Analyzer")
         self.root.geometry("1400x900")  # Slightly larger to accommodate dataset list
         
+        # Set minimum window size for better usability
+        self.root.minsize(800, 600)
+
         # Set up proper close handling
         self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
         
+        # Create scrollable frame for entire window content
+        self.scrollable_frame = ScrollableFrame(self.root)
+
         # Initialize core components
         self.dataset_manager = DatasetManager()
         self.plotter = ParticlePlotter()
@@ -79,8 +147,8 @@ class MainWindow:
     
     def _create_widgets(self):
         """Create all GUI widgets."""
-        # Main frame
-        self.main_frame = ttk.Frame(self.root)
+        # Main frame (now inside scrollable frame)
+        self.main_frame = ttk.Frame(self.scrollable_frame.scrollable_frame)
         
         # Control frame (left side)
         self.control_frame = ttk.LabelFrame(self.main_frame, text="Controls", padding=10)
@@ -373,8 +441,11 @@ class MainWindow:
         self.control_frame.columnconfigure(1, weight=1)
     
     def _create_layout(self):
-        """Arrange widgets in the window."""
-        self.main_frame.pack(fill='both', expand=True, padx=5, pady=5)
+        # Pack the scrollable frame first
+        self.scrollable_frame.pack(fill='both', expand=True, padx=5, pady=5)
+
+        # Then pack the main frame inside it
+        self.main_frame.pack(fill='both', expand=True)
         
         # Use grid for main layout: controls | dataset list | plot
         self.main_frame.columnconfigure(2, weight=1)  # Plot gets most space
@@ -593,9 +664,8 @@ class MainWindow:
             # Calibration mode: single file loading with enhanced preview
             self._load_single_file_with_preview()
         else:
-            # Verification mode: show choice between single and multiple
-            choice_dialog = LoadChoiceDialog(self.root, self._handle_load_choice)
-            choice_dialog.show()
+            # Verification mode: direct multi-file loading (CHANGED)
+            self.load_multiple_files()
 
     def _load_single_file_with_preview(self):
         """Load a single file with automatic preview option."""
@@ -1632,6 +1702,9 @@ class MainWindow:
         canvas_widget = self.canvas.get_tk_widget()
         canvas_widget.pack(fill='both', expand=True)
         
+        # Update scroll region after plot is added
+        self.scrollable_frame.update_scroll_region()
+
         # Add toolbar
         toolbar = NavigationToolbar2Tk(self.canvas, self.plot_frame)
         toolbar.update()
