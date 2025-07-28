@@ -1,6 +1,8 @@
 """
 Main GUI window for the Particle Data Analyzer with Dataset Manager integration and Analysis Mode Selection.
 Updated with compact dataset panel and inline tag editing - saving vertical space.
+LAYOUT UPDATE: Moved "Loaded Datasets" frame to left column (column 0) above dataset management.
+Uses ScrollableFrame for proper vertical scrolling.
 """
 
 import tkinter as tk
@@ -103,7 +105,7 @@ class MainWindow:
         # Set up proper close handling
         self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
         
-        # Create scrollable frame for entire window content
+        # Create scrollable frame for left column content
         self.scrollable_frame = ScrollableFrame(self.root)
 
         # Initialize core components
@@ -147,11 +149,11 @@ class MainWindow:
     
     def _create_widgets(self):
         """Create all GUI widgets."""
-        # Main frame (now inside scrollable frame)
-        self.main_frame = ttk.Frame(self.scrollable_frame.scrollable_frame)
+        # Main frame (now for right side only)
+        self.main_frame = ttk.Frame(self.root)
         
-        # Control frame (left side)
-        self.control_frame = ttk.LabelFrame(self.main_frame, text="Controls", padding=10)
+        # Control frame (left side) - now goes inside scrollable frame
+        self.control_frame = ttk.LabelFrame(self.scrollable_frame.scrollable_frame, text="Controls", padding=10)
         
         # === ANALYSIS MODE SELECTION ===
         self.analysis_mode_frame = ttk.LabelFrame(self.control_frame, text="Analysis Mode", padding=5)
@@ -206,14 +208,107 @@ class MainWindow:
         self.queue_status_label = ttk.Label(self.queue_status_frame, text="", font=('TkDefaultFont', 8))
         self.queue_status_label.pack(anchor='w')
         
-        # === RANDOM DATA GENERATION ===
-        ttk.Separator(self.control_frame, orient='horizontal').grid(row=3, column=0, columnspan=3, sticky='ew', pady=5)
+        # === LOADED DATASETS FRAME (MOVED HERE - previously in middle column) ===
+        self.dataset_list_frame = ttk.LabelFrame(self.control_frame, text="Loaded Datasets", padding=5)
+        self.dataset_list_frame.grid(row=3, column=0, columnspan=3, sticky='ew', pady=(10,10))
+        
+        # Dataset treeview with scrollbar - REDUCED HEIGHT to 8 rows with separate columns
+        list_container = ttk.Frame(self.dataset_list_frame)
+        list_container.pack(fill='x', pady=(0,5))  # Changed from fill='both', expand=True
+        
+        # Create Treeview with columns for Tag and Filename
+        self.dataset_treeview = ttk.Treeview(
+            list_container, 
+            columns=('tag', 'filename'), 
+            show='tree headings',  # Show both tree and headings
+            height=8,  # REDUCED to 8 rows (was 10) to fit in left column
+            selectmode='browse'  # Single selection
+        )
+        
+        # Configure columns
+        self.dataset_treeview.heading('#0', text='')  # Hide the tree column header
+        self.dataset_treeview.heading('tag', text='Bead Size (μm)')
+        self.dataset_treeview.heading('filename', text='Filename')
+        
+        # Set column widths - adjusted for narrower left column
+        self.dataset_treeview.column('#0', width=15, minwidth=15, stretch=False)  # Smaller tree column for bullet
+        self.dataset_treeview.column('tag', width=80, minwidth=60, stretch=True)  # Narrower tag column
+        self.dataset_treeview.column('filename', width=120, minwidth=80, stretch=True)  # Narrower filename column
+        
+        # Scrollbars
+        dataset_scrollbar_y = ttk.Scrollbar(list_container, orient='vertical', command=self.dataset_treeview.yview)
+        dataset_scrollbar_x = ttk.Scrollbar(list_container, orient='horizontal', command=self.dataset_treeview.xview)
+        
+        self.dataset_treeview.configure(yscrollcommand=dataset_scrollbar_y.set, xscrollcommand=dataset_scrollbar_x.set)
+        self.dataset_treeview.bind('<<TreeviewSelect>>', self._on_dataset_select)
+        
+        # Grid layout for treeview and scrollbars
+        self.dataset_treeview.grid(row=0, column=0, sticky='nsew')
+        dataset_scrollbar_y.grid(row=0, column=1, sticky='ns')
+        dataset_scrollbar_x.grid(row=1, column=0, sticky='ew')
+        
+        list_container.grid_rowconfigure(0, weight=1)
+        list_container.grid_columnconfigure(0, weight=1)
+        
+        # === INLINE TAG EDITOR (still in dataset list frame) ===
+        tag_editor_frame = ttk.LabelFrame(self.dataset_list_frame, text="Bead Size (μm)", padding=5)
+        tag_editor_frame.pack(fill='x', pady=(0,5))
 
-        ttk.Label(self.control_frame, text="Generate Random Data:").grid(row=4, column=0, sticky='w', pady=2)
+        # Tag entry with label
+        tag_entry_container = ttk.Frame(tag_editor_frame)
+        tag_entry_container.pack(fill='x')
+
+        ttk.Label(tag_entry_container, text="Bead Size (μm):").pack(side='left', padx=(0,5))
+
+        # Register validation function for float-only input
+        self.validate_float = self.root.register(self._validate_float_input)
+
+        self.tag_entry = ttk.Entry(
+            tag_entry_container, 
+            textvariable=self.current_tag_var,
+            state='disabled',  # Start disabled until dataset is selected
+            validate='key',    # Validate on every keystroke
+            validatecommand=(self.validate_float, '%P')  # %P = new value after keystroke
+        )
+        self.tag_entry.pack(side='left', fill='x', expand=True, padx=(0,5))
+
+        # Bind tag entry events (keep existing bindings)
+        self.current_tag_var.trace('w', self._on_tag_var_change)
+        self.tag_entry.bind('<Return>', self._on_tag_entry_return)
+        self.tag_entry.bind('<FocusOut>', self._on_tag_entry_focusout)
+
+        # Quick save button (keep existing)
+        self.tag_save_btn = ttk.Button(
+            tag_entry_container, 
+            text="💾", 
+            width=3,
+            command=self._save_current_tag,
+            state='disabled'
+        )
+        self.tag_save_btn.pack(side='right')
+        
+        # === COMPACT DATASET INFO (still in dataset list frame) ===
+        compact_info_frame = ttk.LabelFrame(self.dataset_list_frame, text="Dataset Info", padding=5)
+        compact_info_frame.pack(fill='x')
+        
+        # Compact info display - single label with key info
+        self.compact_info_label = ttk.Label(
+            compact_info_frame, 
+            text="No datasets loaded", 
+            font=('TkDefaultFont', 8),
+            wraplength=250,  # Adjusted for left column width
+            justify='left'
+        )
+        self.compact_info_label.pack(anchor='w', fill='x')
+        
+        # === RANDOM DATA GENERATION ===
+        ttk.Separator(self.control_frame, orient='horizontal').grid(row=4, column=0, columnspan=3, sticky='ew', pady=5)
+
+        ttk.Label(self.control_frame, text="Generate Random Data:").grid(row=5, column=0, sticky='w', pady=2)
 
         # Random data controls frame
         random_frame = ttk.Frame(self.control_frame)
-        random_frame.grid(row=5, column=0, columnspan=3, sticky='ew', pady=2)
+        random_frame.grid(row=6, column=0, columnspan=3, sticky='ew', pady=2)
         
         ttk.Label(random_frame, text="Points:").grid(row=0, column=0, sticky='w')
         self.random_count_entry = ttk.Entry(random_frame, textvariable=self.random_count_var, width=8)
@@ -342,118 +437,22 @@ class MainWindow:
         self.stats_text = tk.Text(self.stats_frame, height=8, width=30)
         self.stats_text.pack(fill='both', expand=True)
         
-        # === COMPACT DATASET LIST (Center) ===
-        self.dataset_list_frame = ttk.LabelFrame(self.main_frame, text="Loaded Datasets", padding=5)
-        
-        # Dataset treeview with scrollbar - REDUCED HEIGHT to 10 rows with separate columns
-        list_container = ttk.Frame(self.dataset_list_frame)
-        list_container.pack(fill='x', pady=(0,5))  # Changed from fill='both', expand=True
-        
-        # Create Treeview with columns for Tag and Filename
-        self.dataset_treeview = ttk.Treeview(
-            list_container, 
-            columns=('tag', 'filename'), 
-            show='tree headings',  # Show both tree and headings
-            height=10,  # REDUCED to 10 rows
-            selectmode='browse'  # Single selection
-        )
-        
-        # Configure columns
-        self.dataset_treeview.heading('#0', text='')  # Hide the tree column header
-        self.dataset_treeview.heading('tag', text='Bead Size (μm)')
-        self.dataset_treeview.heading('filename', text='Filename')
-        
-        # Set column widths
-        self.dataset_treeview.column('#0', width=20, minwidth=20, stretch=False)  # Small tree column for bullet
-        self.dataset_treeview.column('tag', width=120, minwidth=80, stretch=True)
-        self.dataset_treeview.column('filename', width=180, minwidth=100, stretch=True)
-        
-        # Scrollbars
-        dataset_scrollbar_y = ttk.Scrollbar(list_container, orient='vertical', command=self.dataset_treeview.yview)
-        dataset_scrollbar_x = ttk.Scrollbar(list_container, orient='horizontal', command=self.dataset_treeview.xview)
-        
-        self.dataset_treeview.configure(yscrollcommand=dataset_scrollbar_y.set, xscrollcommand=dataset_scrollbar_x.set)
-        self.dataset_treeview.bind('<<TreeviewSelect>>', self._on_dataset_select)
-        
-        # Grid layout for treeview and scrollbars
-        self.dataset_treeview.grid(row=0, column=0, sticky='nsew')
-        dataset_scrollbar_y.grid(row=0, column=1, sticky='ns')
-        dataset_scrollbar_x.grid(row=1, column=0, sticky='ew')
-        
-        list_container.grid_rowconfigure(0, weight=1)
-        list_container.grid_columnconfigure(0, weight=1)
-        
-        # === NEW: INLINE TAG EDITOR ===
-        tag_editor_frame = ttk.LabelFrame(self.dataset_list_frame, text="Bead Size (μm)", padding=5)
-        tag_editor_frame.pack(fill='x', pady=(0,5))
-
-        # Tag entry with label
-        tag_entry_container = ttk.Frame(tag_editor_frame)
-        tag_entry_container.pack(fill='x')
-
-        ttk.Label(tag_entry_container, text="Bead Size (μm):").pack(side='left', padx=(0,5))
-
-        # Register validation function for float-only input
-        self.validate_float = self.root.register(self._validate_float_input)
-
-        self.tag_entry = ttk.Entry(
-            tag_entry_container, 
-            textvariable=self.current_tag_var,
-            state='disabled',  # Start disabled until dataset is selected
-            validate='key',    # Validate on every keystroke
-            validatecommand=(self.validate_float, '%P')  # %P = new value after keystroke
-        )
-        self.tag_entry.pack(side='left', fill='x', expand=True, padx=(0,5))
-
-        # Bind tag entry events (keep existing bindings)
-        self.current_tag_var.trace('w', self._on_tag_var_change)
-        self.tag_entry.bind('<Return>', self._on_tag_entry_return)
-        self.tag_entry.bind('<FocusOut>', self._on_tag_entry_focusout)
-
-        # Quick save button (keep existing)
-        self.tag_save_btn = ttk.Button(
-            tag_entry_container, 
-            text="💾", 
-            width=3,
-            command=self._save_current_tag,
-            state='disabled'
-        )
-        self.tag_save_btn.pack(side='right')
-        
-        # === COMPACT DATASET INFO ===
-        compact_info_frame = ttk.LabelFrame(self.dataset_list_frame, text="Dataset Info", padding=5)
-        compact_info_frame.pack(fill='x')
-        
-        # Compact info display - single label with key info
-        self.compact_info_label = ttk.Label(
-            compact_info_frame, 
-            text="No datasets loaded", 
-            font=('TkDefaultFont', 8),
-            wraplength=200,  # Allow text wrapping
-            justify='left'
-        )
-        self.compact_info_label.pack(anchor='w', fill='x')
-        
-        # === PLOT FRAME (Right side) ===
+        # === PLOT FRAME (Right side - now the only right side frame) ===
         self.plot_frame = ttk.LabelFrame(self.main_frame, text="Plot", padding=10)
         
         # Configure column weights
         self.control_frame.columnconfigure(1, weight=1)
     
     def _create_layout(self):
-        # Pack the scrollable frame first
-        self.scrollable_frame.pack(fill='both', expand=True, padx=5, pady=5)
-
-        # Then pack the main frame inside it
-        self.main_frame.pack(fill='both', expand=True)
+        # Pack the scrollable frame and main frame
+        self.scrollable_frame.pack(side='left', fill='y', padx=(5,5), pady=5)
+        self.main_frame.pack(side='left', fill='both', expand=True, padx=(0,5), pady=5)
         
-        # Use grid for main layout: controls | dataset list | plot
-        self.main_frame.columnconfigure(2, weight=1)  # Plot gets most space
-        self.main_frame.rowconfigure(0, weight=1)
+        # Pack the control frame inside the scrollable frame (already done in _create_widgets)
+        self.control_frame.pack(fill='both', expand=True, padx=5, pady=5)
         
-        self.control_frame.grid(row=0, column=0, sticky='nsew', padx=(0, 5))
-        self.dataset_list_frame.grid(row=0, column=1, sticky='nsew', padx=(0, 5))
-        self.plot_frame.grid(row=0, column=2, sticky='nsew')
+        # Pack the plot frame in the main frame
+        self.plot_frame.pack(fill='both', expand=True)
     
     # === NEW: TAG EDITING METHODS ===
     
@@ -710,6 +709,9 @@ class MainWindow:
                 self.plot_button.config(state='normal')
                 self._update_report_button_state()
                 
+                # Update scroll region after adding dataset
+                self.scrollable_frame.update_scroll_region()
+                
                 if skip_rows > 0:
                     messagebox.showinfo("Success", f"Dataset '{tag}' loaded successfully!\nSkipped {skip_rows} rows.")
                 else:
@@ -784,6 +786,10 @@ class MainWindow:
                     self._update_stats_display()
                     self.plot_button.config(state='normal')
                     self._update_report_button_state()
+                    
+                    # Update scroll region after adding dataset
+                    self.scrollable_frame.update_scroll_region()
+                    
                     messagebox.showinfo("Success", f"Generated dataset '{numeric_tag}' successfully!")
                 else:
                     messagebox.showerror("Error", "Failed to add generated data to dataset manager.")
@@ -1052,6 +1058,9 @@ class MainWindow:
                 self._update_stats_display()
                 self.plot_button.config(state='normal')
                 self._update_report_button_state()
+                
+                # Update scroll region after adding dataset
+                self.scrollable_frame.update_scroll_region()
                 
                 logger.info(f"Successfully loaded queue file: {dataset_tag}")
                 self._process_current_queue_file()
@@ -1330,6 +1339,9 @@ class MainWindow:
             # Update UI
             self._update_dataset_ui()
             
+            # Update scroll region after removing dataset
+            self.scrollable_frame.update_scroll_region()
+            
             # Load new active dataset if available
             if self.dataset_manager.has_datasets():
                 self._load_active_dataset_settings()
@@ -1373,6 +1385,9 @@ class MainWindow:
             if self.current_figure:
                 plt.close(self.current_figure)
                 self.current_figure = None
+        
+        # Update scroll region after clearing
+        self.scrollable_frame.update_scroll_region()
     
     def _load_active_dataset_settings(self):
         """Load settings from the active dataset."""
@@ -1702,9 +1717,6 @@ class MainWindow:
         canvas_widget = self.canvas.get_tk_widget()
         canvas_widget.pack(fill='both', expand=True)
         
-        # Update scroll region after plot is added
-        self.scrollable_frame.update_scroll_region()
-
         # Add toolbar
         toolbar = NavigationToolbar2Tk(self.canvas, self.plot_frame)
         toolbar.update()
@@ -1848,3 +1860,4 @@ class MainWindow:
             # Force exit if cleanup fails
             import sys
             sys.exit(0)
+        
