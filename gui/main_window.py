@@ -402,23 +402,11 @@ class MainWindow:
         # === DATASET MANAGEMENT CONTROLS ===
         ttk.Separator(self.control_frame, orient='horizontal').grid(row=15, column=0, columnspan=3, sticky='ew', pady=10)
         
-        # Dataset management frame
+        # Dataset management frame (navigation buttons moved to plot frame)
         self.dataset_mgmt_frame = ttk.LabelFrame(self.control_frame, text="Dataset Management", padding=5)
         self.dataset_mgmt_frame.grid(row=16, column=0, columnspan=3, sticky='ew', pady=5)
         
-        # Dataset navigation
-        nav_frame = ttk.Frame(self.dataset_mgmt_frame)
-        nav_frame.pack(fill='x', pady=5)
-        
-        self.prev_dataset_btn = ttk.Button(nav_frame, text="◀ Previous", 
-                                          command=self.previous_dataset, state='disabled')
-        self.prev_dataset_btn.pack(side='left', padx=(0,5))
-        
-        self.next_dataset_btn = ttk.Button(nav_frame, text="Next ▶", 
-                                          command=self.next_dataset, state='disabled')
-        self.next_dataset_btn.pack(side='left')
-        
-        # Dataset actions (removed Edit Tag since we have inline editing)
+        # Dataset actions (navigation buttons moved to plot frame)
         actions_frame = ttk.Frame(self.dataset_mgmt_frame)
         actions_frame.pack(fill='x', pady=5)
         
@@ -440,6 +428,19 @@ class MainWindow:
         # === PLOT FRAME (Right side - now the only right side frame) ===
         self.plot_frame = ttk.LabelFrame(self.main_frame, text="Plot", padding=10)
         
+        # Add navigation controls to plot frame (moved from dataset management)
+        plot_nav_frame = ttk.Frame(self.plot_frame)
+        plot_nav_frame.pack(fill='x', pady=(0, 10))
+        
+        # Dataset navigation buttons (moved here from dataset management frame)
+        self.prev_dataset_btn = ttk.Button(plot_nav_frame, text="◀ Previous Dataset", 
+                                          command=self.previous_dataset, state='disabled')
+        self.prev_dataset_btn.pack(side='left', padx=(0,10))
+        
+        self.next_dataset_btn = ttk.Button(plot_nav_frame, text="Next Dataset ▶", 
+                                          command=self.next_dataset, state='disabled')
+        self.next_dataset_btn.pack(side='left')
+        
         # Configure column weights
         self.control_frame.columnconfigure(1, weight=1)
     
@@ -453,6 +454,18 @@ class MainWindow:
         
         # Pack the plot frame in the main frame
         self.plot_frame.pack(fill='both', expand=True)
+        
+        # Create placeholder for plot content (will be filled when plot is created)
+        plot_content_frame = ttk.Frame(self.plot_frame)
+        plot_content_frame.pack(fill='both', expand=True)
+        
+        # Initially show a message when no plot exists
+        self.no_plot_label = ttk.Label(plot_content_frame, 
+                                      text="No plot to display\nLoad data and click 'Create Plot' to begin",
+                                      font=('TkDefaultFont', 10),
+                                      foreground='gray',
+                                      justify='center')
+        self.no_plot_label.pack(expand=True)
     
     # === NEW: TAG EDITING METHODS ===
     
@@ -1381,10 +1394,23 @@ class MainWindow:
         # Clear plot if exists
         if hasattr(self, 'canvas'):
             for widget in self.plot_frame.winfo_children():
-                widget.destroy()
+                # Only destroy plot content, keep navigation buttons
+                if widget != self.plot_frame.winfo_children()[0]:  # Keep nav frame
+                    widget.destroy()
             if self.current_figure:
                 plt.close(self.current_figure)
                 self.current_figure = None
+            
+            # Show the no plot message again
+            if not hasattr(self, 'no_plot_label') or not self.no_plot_label.winfo_exists():
+                plot_content_frame = ttk.Frame(self.plot_frame)
+                plot_content_frame.pack(fill='both', expand=True)
+                self.no_plot_label = ttk.Label(plot_content_frame, 
+                                              text="No plot to display\nLoad data and click 'Create Plot' to begin",
+                                              font=('TkDefaultFont', 10),
+                                              foreground='gray',
+                                              justify='center')
+                self.no_plot_label.pack(expand=True)
         
         # Update scroll region after clearing
         self.scrollable_frame.update_scroll_region()
@@ -1697,9 +1723,15 @@ class MainWindow:
     
     def _display_plot(self, figure):
         """Display the plot in the GUI."""
-        # Clear existing plot widgets completely
+        # Clear existing plot widgets completely (but keep navigation buttons)
         for widget in self.plot_frame.winfo_children():
-            widget.destroy()
+            # Only destroy widgets that aren't the navigation frame
+            if widget != self.plot_frame.winfo_children()[0]:  # Keep the first child (nav frame)
+                widget.destroy()
+        
+        # Hide the no plot label if it exists
+        if hasattr(self, 'no_plot_label'):
+            self.no_plot_label.destroy()
         
         # Clear any existing matplotlib figures
         if hasattr(self, 'canvas'):
