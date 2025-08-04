@@ -18,7 +18,7 @@ MAX_BIN_COUNT = 4095
 SIZE_COLUMN_NAMES = ['size', 'diameter', 'particle_size', 'Size', 'Diameter']
 FREQUENCY_COLUMN_NAMES = ['frequency', 'count', 'number', 'Frequency', 'Count']
 
-# Random data generation settings
+# Random data generation settings - OBSOLETE
 RANDOM_DATA_BOUNDS = {
     'size_min': 0.1,      # Minimum particle size
     'size_max': 100.0,    # Maximum particle size
