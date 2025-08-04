@@ -10,6 +10,7 @@ from tkinter import ttk, filedialog, messagebox, simpledialog
 import logging
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 import matplotlib.pyplot as plt
+import numpy as np
 
 from core.data_processor import ParticleDataProcessor
 from core.dataset_manager import DatasetManager
@@ -59,7 +60,7 @@ class ScrollableFrame(ttk.Frame):
         
         # Create window in canvas
         self.canvas_window = self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
-        
+
         # Bind events
         self.scrollable_frame.bind("<Configure>", self._on_frame_configure)
         self.canvas.bind("<Configure>", self._on_canvas_configure)
@@ -142,6 +143,10 @@ class MainWindow:
         self.data_mode_var = tk.StringVar(value='raw_measurements')  # 'pre_aggregated' or 'raw_measurements'
         self.skip_rows_var = tk.IntVar(value=0)
         
+
+        # New variable for gaussian fit
+        self.show_gaussian_fit_var = tk.BooleanVar(value=True)
+
         # Analysis mode selection variable (calibration vs verification)
         self.analysis_mode_var = tk.StringVar(value='calibration')
         
@@ -404,26 +409,45 @@ class MainWindow:
                                                 command=self._on_stats_toggle)
         self.stats_lines_check.grid(row=12, column=0, columnspan=2, sticky='w', pady=2)
         
+        # Gaussian curve fitting toggle
+        self.gaussian_fit_check = ttk.Checkbutton(
+            self.control_frame, 
+            text="Show Gaussian Curve Fit", 
+            variable=self.show_gaussian_fit_var,
+            command=self._on_gaussian_toggle
+        )
+        self.gaussian_fit_check.grid(row=13, column=0, columnspan=2, sticky='w', pady=2)
+
+        # Gaussian fit info button
+        self.gaussian_info_btn = ttk.Button(
+            self.control_frame, 
+            text="📊 Fit Info", 
+            command=self.show_gaussian_info, 
+            state='disabled',
+            width=10
+        )
+        self.gaussian_info_btn.grid(row=13, column=2, sticky='w', padx=(10,0), pady=2)
+
         # Plot button
         self.plot_button = ttk.Button(self.control_frame, text="Create Plot", 
                                      command=self.create_plot, state='disabled')
-        self.plot_button.grid(row=13, column=0, columnspan=2, sticky='ew', pady=10)
+        self.plot_button.grid(row=14, column=0, columnspan=2, sticky='ew', pady=10)
         
         # Report generation button - will be mode-restricted
         self.report_button = ttk.Button(self.control_frame, text="Generate Report", 
                                        command=self.generate_report, state='disabled')
-        self.report_button.grid(row=14, column=0, columnspan=2, sticky='ew', pady=5)
+        self.report_button.grid(row=15, column=0, columnspan=2, sticky='ew', pady=5)
         
         # Show/hide report button based on availability
         if not REPORTS_AVAILABLE:
             self.report_button.config(state='disabled', text="Generate Report (ReportLab not installed)")
         
         # === DATASET MANAGEMENT CONTROLS ===
-        ttk.Separator(self.control_frame, orient='horizontal').grid(row=15, column=0, columnspan=3, sticky='ew', pady=10)
+        ttk.Separator(self.control_frame, orient='horizontal').grid(row=16, column=0, columnspan=3, sticky='ew', pady=10)
         
         # Dataset management frame (navigation buttons moved to plot frame)
         self.dataset_mgmt_frame = ttk.LabelFrame(self.control_frame, text="Dataset Management", padding=5)
-        self.dataset_mgmt_frame.grid(row=16, column=0, columnspan=3, sticky='ew', pady=5)
+        self.dataset_mgmt_frame.grid(row=17, column=0, columnspan=3, sticky='ew', pady=5)
         
         # Dataset actions (navigation buttons moved to plot frame)
         actions_frame = ttk.Frame(self.dataset_mgmt_frame)
@@ -444,7 +468,7 @@ class MainWindow:
         
         # Stats display
         self.stats_frame = ttk.LabelFrame(self.control_frame, text="Data Info", padding=5)
-        self.stats_frame.grid(row=17, column=0, columnspan=3, sticky='ew', pady=5)
+        self.stats_frame.grid(row=18, column=0, columnspan=3, sticky='ew', pady=5)
         
         self.stats_text = tk.Text(self.stats_frame, height=8, width=30)
         self.stats_text.pack(fill='both', expand=True)
@@ -1361,6 +1385,172 @@ class MainWindow:
         # Focus on text area
         notes_text.focus_set()
     
+    def _on_gaussian_toggle(self):
+        """Handle Gaussian curve fitting toggle change."""
+        # Save settings to active dataset
+        self._save_active_dataset_settings()
+        
+        # If we have a current plot, update it
+        if hasattr(self, 'canvas') and self.dataset_manager.get_active_dataset():
+            self._update_plot()
+
+    def show_gaussian_info(self):
+        """Show detailed Gaussian fit information in a dialog."""
+        if not hasattr(self.plotter, 'get_last_gaussian_fit'):
+            messagebox.showinfo("Info", "Gaussian fitting not available in current plotter.")
+            return
+        
+        fit_result = self.plotter.get_last_gaussian_fit()
+        if not fit_result or not fit_result.get('success'):
+            messagebox.showinfo("No Fit Data", "No successful Gaussian fit available.\n\nCreate a plot with Gaussian fitting enabled first.")
+            return
+        
+        self._show_gaussian_fit_dialog(fit_result)
+
+    def _show_gaussian_fit_dialog(self, fit_result: dict):
+        """Show detailed Gaussian fit results in a dialog window."""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Gaussian Fit Results")
+        dialog.geometry("500x600")
+        dialog.grab_set()  # Make it modal
+        
+        # Center the dialog
+        dialog.transient(self.root)
+        dialog.update_idletasks()
+        x = (dialog.winfo_screenwidth() // 2) - 250
+        y = (dialog.winfo_screenheight() // 2) - 300
+        dialog.geometry(f"500x600+{x}+{y}")
+        
+        # Main frame with padding
+        main_frame = ttk.Frame(dialog, padding=20)
+        main_frame.pack(fill='both', expand=True)
+        
+        # Title
+        title_label = ttk.Label(main_frame, text="Gaussian Curve Fit Analysis", 
+                            font=('TkDefaultFont', 12, 'bold'))
+        title_label.pack(anchor='w', pady=(0, 15))
+        
+        # Create notebook for organized display
+        notebook = ttk.Notebook(main_frame)
+        notebook.pack(fill='both', expand=True, pady=(0, 15))
+        
+        # === Parameters Tab ===
+        params_frame = ttk.Frame(notebook, padding=10)
+        notebook.add(params_frame, text="Parameters")
+        
+        params = fit_result['fitted_params']
+        param_errors = fit_result['param_errors']
+        
+        # Parameters with uncertainties
+        params_data = [
+            ['Peak Location (μ)', f"{params['mean']:.4f} ± {param_errors['mean_error']:.4f}"],
+            ['Standard Deviation (σ)', f"{params['stddev']:.4f} ± {param_errors['stddev_error']:.4f}"],
+            ['Peak Height (A)', f"{params['amplitude']:.2f} ± {param_errors['amplitude_error']:.2f}"],
+            ['Full Width Half Max', f"{fit_result['statistics']['fwhm']:.4f}"],
+            ['Area Under Curve', f"{fit_result['statistics']['area_under_curve']:.2f}"],
+            ['Mode Bin Center', f"{fit_result['statistics']['mode_bin_center']:.4f}"],
+            ['Mode Bin Index', f"{fit_result['statistics']['mode_bin_index']}"]
+        ]
+        
+        for i, (param_name, param_value) in enumerate(params_data):
+            ttk.Label(params_frame, text=f"{param_name}:", 
+                    font=('TkDefaultFont', 9, 'bold')).grid(row=i, column=0, sticky='w', pady=2)
+            ttk.Label(params_frame, text=param_value, 
+                    font=('Courier', 9)).grid(row=i, column=1, sticky='w', padx=(20, 0), pady=2)
+        
+        # === Quality Tab ===
+        quality_frame = ttk.Frame(notebook, padding=10)
+        notebook.add(quality_frame, text="Fit Quality")
+        
+        quality = fit_result['fit_quality']
+        
+        # Determine fit quality assessment
+        is_good_fit = (quality['r_squared'] >= 0.80 and 
+                    quality['reduced_chi_squared'] <= 2.0)
+        
+        quality_status = "✓ Good Fit" if is_good_fit else "⚠ Poor Fit"
+        status_color = 'green' if is_good_fit else 'red'
+        
+        status_label = ttk.Label(quality_frame, text=quality_status, 
+                                font=('TkDefaultFont', 11, 'bold'))
+        status_label.pack(anchor='w', pady=(0, 10))
+        # Note: tkinter doesn't support foreground color on ttk.Label easily, 
+        # so we'll use a regular tk.Label for color
+        status_label.destroy()
+        status_label = tk.Label(quality_frame, text=quality_status,
+                            font=('TkDefaultFont', 11, 'bold'),
+                            fg=status_color)
+        status_label.pack(anchor='w', pady=(0, 10))
+        
+        quality_data = [
+            ['R-squared (R²)', f"{quality['r_squared']:.6f}"],
+            ['Root Mean Square Error', f"{quality['rmse']:.4f}"],
+            ['Mean Absolute Error', f"{quality['mae']:.4f}"],
+            ['Normalized RMSE (%)', f"{quality['nrmse_percent']:.2f}%"],
+            ['Chi-squared (χ²)', f"{quality['chi_squared']:.4f}"],
+            ['Reduced Chi-squared', f"{quality['reduced_chi_squared']:.4f}"],
+            ['Degrees of Freedom', f"{quality['degrees_of_freedom']}"]
+        ]
+        
+        for i, (metric_name, metric_value) in enumerate(quality_data):
+            ttk.Label(quality_frame, text=f"{metric_name}:", 
+                    font=('TkDefaultFont', 9, 'bold')).grid(row=i+1, column=0, sticky='w', pady=2)
+            ttk.Label(quality_frame, text=metric_value, 
+                    font=('Courier', 9)).grid(row=i+1, column=1, sticky='w', padx=(20, 0), pady=2)
+        
+        # === Data Tab ===
+        data_frame = ttk.Frame(notebook, padding=10)
+        notebook.add(data_frame, text="Data Summary")
+        
+        # Data summary
+        original_data = fit_result['original_data']
+        data_info = [
+            ['Data Points Used', f"{len(original_data['x'])}"],
+            ['X Range', f"{np.min(original_data['x']):.3f} to {np.max(original_data['x']):.3f}"],
+            ['Y Range', f"{np.min(original_data['y']):.3f} to {np.max(original_data['y']):.3f}"],
+            ['Peak X Location', f"{original_data['x'][np.argmax(original_data['y'])]:.3f}"],
+            ['Peak Y Value', f"{np.max(original_data['y']):.3f}"]
+        ]
+        
+        for i, (info_name, info_value) in enumerate(data_info):
+            ttk.Label(data_frame, text=f"{info_name}:", 
+                    font=('TkDefaultFont', 9, 'bold')).grid(row=i, column=0, sticky='w', pady=2)
+            ttk.Label(data_frame, text=info_value, 
+                    font=('Courier', 9)).grid(row=i, column=1, sticky='w', padx=(20, 0), pady=2)
+        
+        # === Equation Tab ===
+        equation_frame = ttk.Frame(notebook, padding=10)
+        notebook.add(equation_frame, text="Equation")
+        
+        # Gaussian equation with fitted parameters
+        equation_text = f"""Fitted Gaussian Equation:
+
+    y = A × exp(-((x - μ)² / (2σ²)))
+
+    Where:
+    A = {params['amplitude']:.4f}  (amplitude)
+    μ = {params['mean']:.4f}      (mean)
+    σ = {params['stddev']:.4f}     (standard deviation)
+
+    Substituted:
+    y = {params['amplitude']:.4f} × exp(-((x - {params['mean']:.4f})² / (2 × {params['stddev']:.4f}²)))
+
+    68% of data lies within μ ± σ = [{params['mean'] - params['stddev']:.3f}, {params['mean'] + params['stddev']:.3f}]
+    95% of data lies within μ ± 2σ = [{params['mean'] - 2*params['stddev']:.3f}, {params['mean'] + 2*params['stddev']:.3f}]"""
+        
+        equation_label = tk.Text(equation_frame, wrap='word', height=15, width=60, 
+                                font=('Courier', 9))
+        equation_label.insert(1.0, equation_text)
+        equation_label.config(state='disabled')
+        equation_label.pack(fill='both', expand=True)
+        
+        # Close button
+        close_button = ttk.Button(main_frame, text="Close", command=dialog.destroy)
+        close_button.pack(anchor='e')
+        
+        # Focus on the dialog
+        dialog.focus_set()
+
     def show_help_dialog(self):
         """Show help dialog with usage information."""
         help_window = tk.Toplevel(self.root)
@@ -1553,7 +1743,8 @@ For more detailed help, please refer to the user manual or contact support."""
         self.size_column_var.set(settings['size_column'] or '')
         self.frequency_column_var.set(settings['frequency_column'] or '')
         self.show_stats_lines_var.set(settings['show_stats_lines'])
-        
+        self.show_gaussian_fit_var.set(settings.get('show_gaussian_fit', True))
+
         # Update data processor mode
         data_processor = active_dataset['data_processor']
         data_processor.set_data_mode(settings['data_mode'])
@@ -1574,7 +1765,8 @@ For more detailed help, please refer to the user manual or contact support."""
             'frequency_column': self.frequency_column_var.get(),
             'show_stats_lines': self.show_stats_lines_var.get()
         }
-        
+        settings['show_gaussian_fit'] = self.show_gaussian_fit_var.get()
+
         self.dataset_manager.update_analysis_settings(active_dataset['id'], settings)
     
     # === DATA PROCESSING AND PLOTTING METHODS ===
@@ -1804,7 +1996,8 @@ For more detailed help, please refer to the user manual or contact support."""
             size_data, frequency_data, self.bin_count_var.get(),
             title=plot_title,
             show_stats_lines=self.show_stats_lines_var.get(),
-            data_mode=mode
+            data_mode=mode,
+            show_gaussian_fit=self.show_gaussian_fit_var.get()
         )
         
         if figure is not None:
@@ -1838,7 +2031,8 @@ For more detailed help, please refer to the user manual or contact support."""
                 size_data, frequency_data, self.bin_count_var.get(),
                 title=plot_title,
                 show_stats_lines=self.show_stats_lines_var.get(),
-                data_mode=mode
+                data_mode=mode,
+                show_gaussian_fit=self.show_gaussian_fit_var.get()  # ADD THIS LINE
             )
             
             if figure is not None:
@@ -2000,6 +2194,13 @@ For more detailed help, please refer to the user manual or contact support."""
     def _update_report_button_state(self):
         """Update the report button state based on available data, plot, and mode."""
         self._update_report_button_state_for_mode()
+        if hasattr(self, 'gaussian_info_btn'):
+            # Enable Gaussian info button if we have a plot with Gaussian fit
+            has_gaussian_fit = (hasattr(self, 'canvas') and 
+                            hasattr(self.plotter, 'get_last_gaussian_fit') and
+                            self.plotter.get_last_gaussian_fit() is not None)
+            self.gaussian_info_btn.config(state='normal' if has_gaussian_fit else 'disabled')
+        
     
     def _on_closing(self):
         """Handle application closing cleanly."""

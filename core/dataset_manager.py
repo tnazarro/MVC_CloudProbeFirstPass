@@ -81,7 +81,8 @@ class DatasetManager:
                     'bin_count': 50,
                     'size_column': data_processor.size_column,
                     'frequency_column': data_processor.frequency_column,
-                    'show_stats_lines': True
+                    'show_stats_lines': True,
+                    'show_gaussian_fit': True
                 }
             }
             
