@@ -218,7 +218,8 @@ class ParticlePlotter:
         stats_text += f'  Peak: {fit_params["mean"]:.2f}\n'
         stats_text += f'  σ: {fit_params["stddev"]:.2f}\n'
         stats_text += f'  FWHM: {stats["fwhm"]:.2f}\n'
-        stats_text += f'  R²: {fit_quality["r_squared"]:.3f}'
+        stats_text += f'  R²: {fit_quality["r_squared"]:.3f}\n'
+        stats_text += f'  χ²: {fit_quality["reduced_chi_squared"]:.2f}'
         
         # Add fit quality indicator
         if self.gaussian_fitter.is_good_fit():

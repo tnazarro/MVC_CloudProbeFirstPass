@@ -77,7 +77,7 @@ class DatasetManager:
                 'skip_rows': skip_rows,
                 # Store current analysis settings per dataset
                 'analysis_settings': {
-                    'data_mode': 'pre_aggregated',
+                    'data_mode': 'raw_measurements',
                     'bin_count': 50,
                     'size_column': data_processor.size_column,
                     'frequency_column': data_processor.frequency_column,
