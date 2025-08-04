@@ -15,7 +15,7 @@ import numpy as np
 from core.data_processor import ParticleDataProcessor
 from core.dataset_manager import DatasetManager
 from core.plotter import ParticlePlotter
-from config.constants import SUPPORTED_FILE_TYPES, MIN_BIN_COUNT, MAX_BIN_COUNT, DEFAULT_BIN_COUNT, RANDOM_DATA_BOUNDS
+from config.constants import SUPPORTED_FILE_TYPES, MIN_BIN_COUNT, MAX_BIN_COUNT, DEFAULT_BIN_COUNT
 from core.file_queue import FileQueue
 from gui.dialogs.file_preview import FilePreviewDialog
 from gui.dialogs.load_choice import LoadChoiceDialog
@@ -137,8 +137,8 @@ class MainWindow:
         self.bin_count_var = tk.IntVar(value=DEFAULT_BIN_COUNT)
         self.size_column_var = tk.StringVar()
         self.frequency_column_var = tk.StringVar()
-        self.random_count_var = tk.IntVar(value=RANDOM_DATA_BOUNDS['default_n'])
-        self.distribution_var = tk.StringVar(value='lognormal')
+        # self.random_count_var = tk.IntVar(value=RANDOM_DATA_BOUNDS['default_n'])
+        # self.distribution_var = tk.StringVar(value='lognormal')
         self.show_stats_lines_var = tk.BooleanVar(value=True)
         self.data_mode_var = tk.StringVar(value='raw_measurements')  # 'pre_aggregated' or 'raw_measurements'
         self.skip_rows_var = tk.IntVar(value=0)
@@ -325,36 +325,36 @@ class MainWindow:
         )
         self.compact_info_label.pack(anchor='w', fill='x')
         
-        # === RANDOM DATA GENERATION ===
-        ttk.Separator(self.control_frame, orient='horizontal').grid(row=4, column=0, columnspan=3, sticky='ew', pady=5)
+        # # === RANDOM DATA GENERATION ===
+        # ttk.Separator(self.control_frame, orient='horizontal').grid(row=4, column=0, columnspan=3, sticky='ew', pady=5)
 
-        ttk.Label(self.control_frame, text="Generate Random Data:").grid(row=5, column=0, sticky='w', pady=2)
+        # ttk.Label(self.control_frame, text="Generate Random Data:").grid(row=5, column=0, sticky='w', pady=2)
 
-        # Random data controls frame
-        random_frame = ttk.Frame(self.control_frame)
-        random_frame.grid(row=6, column=0, columnspan=3, sticky='ew', pady=2)
+        # # Random data controls frame
+        # random_frame = ttk.Frame(self.control_frame)
+        # random_frame.grid(row=6, column=0, columnspan=3, sticky='ew', pady=2)
         
-        ttk.Label(random_frame, text="Points:").grid(row=0, column=0, sticky='w')
-        self.random_count_entry = ttk.Entry(random_frame, textvariable=self.random_count_var, width=8)
-        self.random_count_entry.grid(row=0, column=1, padx=5)
+        # ttk.Label(random_frame, text="Points:").grid(row=0, column=0, sticky='w')
+        # self.random_count_entry = ttk.Entry(random_frame, textvariable=self.random_count_var, width=8)
+        # self.random_count_entry.grid(row=0, column=1, padx=5)
         
-        ttk.Label(random_frame, text="Distribution:").grid(row=0, column=2, sticky='w', padx=(10,0))
-        self.distribution_combo = ttk.Combobox(random_frame, textvariable=self.distribution_var, 
-                                             values=['lognormal', 'normal', 'uniform'], 
-                                             state='readonly', width=10)
-        self.distribution_combo.grid(row=0, column=3, padx=5)
+        # ttk.Label(random_frame, text="Distribution:").grid(row=0, column=2, sticky='w', padx=(10,0))
+        # self.distribution_combo = ttk.Combobox(random_frame, textvariable=self.distribution_var, 
+        #                                      values=['lognormal', 'normal', 'uniform'], 
+        #                                      state='readonly', width=10)
+        # self.distribution_combo.grid(row=0, column=3, padx=5)
         
-        self.generate_button = ttk.Button(random_frame, text="Generate", command=self.generate_random_data)
-        self.generate_button.grid(row=0, column=4, padx=5)
+        # self.generate_button = ttk.Button(random_frame, text="Generate", command=self.generate_random_data)
+        # self.generate_button.grid(row=0, column=4, padx=5)
         
         # === DATA ANALYSIS CONTROLS ===
-        ttk.Separator(self.control_frame, orient='horizontal').grid(row=7, column=0, columnspan=3, sticky='ew', pady=5)
+        ttk.Separator(self.control_frame, orient='horizontal').grid(row=4, column=0, columnspan=3, sticky='ew', pady=5)
         
         # Data mode selection
-        ttk.Label(self.control_frame, text="Data Type:").grid(row=8, column=0, sticky='w', pady=2)
+        ttk.Label(self.control_frame, text="Data Type:").grid(row=5, column=0, sticky='w', pady=2)
         
         data_mode_frame = ttk.Frame(self.control_frame)
-        data_mode_frame.grid(row=8, column=1, columnspan=2, sticky='ew', pady=2)
+        data_mode_frame.grid(row=5, column=1, columnspan=2, sticky='ew', pady=2)
         
         self.pre_agg_radio = ttk.Radiobutton(data_mode_frame, text="Pre-aggregated (Size + Frequency)", 
                                            variable=self.data_mode_var, value='pre_aggregated',
@@ -370,22 +370,22 @@ class MainWindow:
         ttk.Label(self.control_frame, text="Size Column:").grid(row=9, column=0, sticky='w', pady=2)
         self.size_combo = ttk.Combobox(self.control_frame, textvariable=self.size_column_var, 
                                       state='readonly')
-        self.size_combo.grid(row=9, column=1, sticky='ew', pady=2)
+        self.size_combo.grid(row=6, column=1, sticky='ew', pady=2)
         self.size_combo.bind('<<ComboboxSelected>>', self._on_column_change)
         
         self.frequency_label = ttk.Label(self.control_frame, text="Frequency Column:")
-        self.frequency_label.grid(row=10, column=0, sticky='w', pady=2)
+        self.frequency_label.grid(row=7, column=0, sticky='w', pady=2)
         self.frequency_combo = ttk.Combobox(self.control_frame, textvariable=self.frequency_column_var, 
                                            state='readonly')
-        self.frequency_combo.grid(row=10, column=1, sticky='ew', pady=2)
+        self.frequency_combo.grid(row=7, column=1, sticky='ew', pady=2)
         self.frequency_combo.bind('<<ComboboxSelected>>', self._on_column_change)
         
         # Bin count control
-        ttk.Label(self.control_frame, text="Bins:").grid(row=11, column=0, sticky='w', pady=2)
+        ttk.Label(self.control_frame, text="Bins:").grid(row=8, column=0, sticky='w', pady=2)
 
         # Create frame for bin controls
         bin_frame = ttk.Frame(self.control_frame)
-        bin_frame.grid(row=11, column=1, columnspan=2, sticky='ew', pady=2)
+        bin_frame.grid(row=8, column=1, columnspan=2, sticky='ew', pady=2)
 
         # Bin count entry field only (remove slider)
         self.bin_entry = ttk.Entry(bin_frame, textvariable=self.bin_count_var, width=8)
@@ -407,7 +407,7 @@ class MainWindow:
                                                 text="Show Mean & Std Dev Lines", 
                                                 variable=self.show_stats_lines_var,
                                                 command=self._on_stats_toggle)
-        self.stats_lines_check.grid(row=12, column=0, columnspan=2, sticky='w', pady=2)
+        self.stats_lines_check.grid(row=9, column=0, columnspan=2, sticky='w', pady=2)
         
         # Gaussian curve fitting toggle
         self.gaussian_fit_check = ttk.Checkbutton(
@@ -416,7 +416,7 @@ class MainWindow:
             variable=self.show_gaussian_fit_var,
             command=self._on_gaussian_toggle
         )
-        self.gaussian_fit_check.grid(row=13, column=0, columnspan=2, sticky='w', pady=2)
+        self.gaussian_fit_check.grid(row=10, column=0, columnspan=2, sticky='w', pady=2)
 
         # Gaussian fit info button
         self.gaussian_info_btn = ttk.Button(
@@ -426,28 +426,28 @@ class MainWindow:
             state='disabled',
             width=10
         )
-        self.gaussian_info_btn.grid(row=13, column=2, sticky='w', padx=(10,0), pady=2)
+        self.gaussian_info_btn.grid(row=10, column=2, sticky='w', padx=(10,0), pady=2)
 
         # Plot button
         self.plot_button = ttk.Button(self.control_frame, text="Create Plot", 
                                      command=self.create_plot, state='disabled')
-        self.plot_button.grid(row=14, column=0, columnspan=2, sticky='ew', pady=10)
+        self.plot_button.grid(row=11, column=0, columnspan=2, sticky='ew', pady=10)
         
         # Report generation button - will be mode-restricted
         self.report_button = ttk.Button(self.control_frame, text="Generate Report", 
                                        command=self.generate_report, state='disabled')
-        self.report_button.grid(row=15, column=0, columnspan=2, sticky='ew', pady=5)
+        self.report_button.grid(row=12, column=0, columnspan=2, sticky='ew', pady=5)
         
         # Show/hide report button based on availability
         if not REPORTS_AVAILABLE:
             self.report_button.config(state='disabled', text="Generate Report (ReportLab not installed)")
         
         # === DATASET MANAGEMENT CONTROLS ===
-        ttk.Separator(self.control_frame, orient='horizontal').grid(row=16, column=0, columnspan=3, sticky='ew', pady=10)
+        ttk.Separator(self.control_frame, orient='horizontal').grid(row=13, column=0, columnspan=3, sticky='ew', pady=10)
         
         # Dataset management frame (navigation buttons moved to plot frame)
         self.dataset_mgmt_frame = ttk.LabelFrame(self.control_frame, text="Dataset Management", padding=5)
-        self.dataset_mgmt_frame.grid(row=17, column=0, columnspan=3, sticky='ew', pady=5)
+        self.dataset_mgmt_frame.grid(row=14, column=0, columnspan=3, sticky='ew', pady=5)
         
         # Dataset actions (navigation buttons moved to plot frame)
         actions_frame = ttk.Frame(self.dataset_mgmt_frame)
@@ -468,7 +468,7 @@ class MainWindow:
         
         # Stats display
         self.stats_frame = ttk.LabelFrame(self.control_frame, text="Data Info", padding=5)
-        self.stats_frame.grid(row=18, column=0, columnspan=3, sticky='ew', pady=5)
+        self.stats_frame.grid(row=15, column=0, columnspan=3, sticky='ew', pady=5)
         
         self.stats_text = tk.Text(self.stats_frame, height=8, width=30)
         self.stats_text.pack(fill='both', expand=True)
@@ -820,51 +820,51 @@ class MainWindow:
             else:
                 messagebox.showerror("Error", "No valid files were added to the queue.")
     
-    def generate_random_data(self):
-        """Generate random particle data for testing."""
-        try:
-            n = self.random_count_var.get()
-            distribution = self.distribution_var.get()
+    # def generate_random_data(self):
+    #     """Generate random particle data for testing."""
+    #     try:
+    #         n = self.random_count_var.get()
+    #         distribution = self.distribution_var.get()
             
-            if n <= 0:
-                messagebox.showerror("Error", "Number of points must be positive.")
-                return
+    #         if n <= 0:
+    #             messagebox.showerror("Error", "Number of points must be positive.")
+    #             return
             
-            # Create temporary processor for random data generation
-            temp_processor = ParticleDataProcessor()
-            if temp_processor.generate_random_data(n, distribution):
-                # Generate numeric tag based on parameters
-                numeric_tag = str(float(n))  # Use point count as tag
-                notes = f"Generated {distribution} distribution with {n} data points"
+    #         # Create temporary processor for random data generation
+    #         temp_processor = ParticleDataProcessor()
+    #         if temp_processor.generate_random_data(n, distribution):
+    #             # Generate numeric tag based on parameters
+    #             numeric_tag = str(float(n))  # Use point count as tag
+    #             notes = f"Generated {distribution} distribution with {n} data points"
                 
-                dataset_id = self._add_generated_dataset(temp_processor, numeric_tag, notes)
+    #             dataset_id = self._add_generated_dataset(temp_processor, numeric_tag, notes)
                 
-                if dataset_id:
-                    # Set as active dataset
-                    self.dataset_manager.set_active_dataset(dataset_id)
+    #             if dataset_id:
+    #                 # Set as active dataset
+    #                 self.dataset_manager.set_active_dataset(dataset_id)
                     
-                    # Update UI
-                    self._update_dataset_ui()
-                    self._load_active_dataset_settings()
-                    self._update_column_combos()
-                    self._update_stats_display()
-                    self.plot_button.config(state='normal')
-                    self._update_report_button_state()
+    #                 # Update UI
+    #                 self._update_dataset_ui()
+    #                 self._load_active_dataset_settings()
+    #                 self._update_column_combos()
+    #                 self._update_stats_display()
+    #                 self.plot_button.config(state='normal')
+    #                 self._update_report_button_state()
                     
-                    # Update scroll region after adding dataset
-                    self.scrollable_frame.update_scroll_region()
+    #                 # Update scroll region after adding dataset
+    #                 self.scrollable_frame.update_scroll_region()
                     
-                    messagebox.showinfo("Success", f"Generated dataset '{numeric_tag}' successfully!")
-                else:
-                    messagebox.showerror("Error", "Failed to add generated data to dataset manager.")
-            else:
-                messagebox.showerror("Error", "Failed to generate random data.")
+    #                 messagebox.showinfo("Success", f"Generated dataset '{numeric_tag}' successfully!")
+    #             else:
+    #                 messagebox.showerror("Error", "Failed to add generated data to dataset manager.")
+    #         else:
+    #             messagebox.showerror("Error", "Failed to generate random data.")
                 
-        except tk.TclError:
-            messagebox.showerror("Error", "Please enter a valid number of points.")
+    #     except tk.TclError:
+    #         messagebox.showerror("Error", "Please enter a valid number of points.")
 
     
-    def _add_generated_dataset(self, data_processor, tag, notes):
+    # def _add_generated_dataset(self, data_processor, tag, notes):
         """Add a generated dataset to the dataset manager."""
         import uuid
         from datetime import datetime
