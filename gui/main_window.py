@@ -69,6 +69,22 @@ class ScrollableFrame(ttk.Frame):
         """Manually update the scroll region - useful when content changes."""
         self.canvas.update_idletasks()  # Make sure all pending layout updates are processed
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        
+        # Force scrollbar visibility update
+        self.canvas.update()
+        
+        # Debug info
+        scroll_region = self.canvas.cget('scrollregion')
+        canvas_height = self.canvas.winfo_height()
+        if scroll_region:
+            region_parts = scroll_region.split()
+            if len(region_parts) >= 4:
+                content_height = float(region_parts[3]) - float(region_parts[1])
+                print(f"ScrollableFrame: Content height: {content_height}, Canvas height: {canvas_height}")
+                if content_height > canvas_height:
+                    print("ScrollableFrame: Content should be scrollable")
+                else:
+                    print("ScrollableFrame: Content fits in canvas")
 
     def _on_frame_configure(self, event):
         """Update scroll region when frame size changes."""
@@ -107,6 +123,9 @@ class MainWindow:
         
         # Create scrollable frame for left column content
         self.scrollable_frame = ScrollableFrame(self.root)
+
+        # Create scrollable frame for plot area
+        self.plot_scrollable_frame = ScrollableFrame(self.root)
 
         # Initialize core components
         self.dataset_manager = DatasetManager()
@@ -149,7 +168,7 @@ class MainWindow:
     
     def _create_widgets(self):
         """Create all GUI widgets."""
-        # Main frame (now for right side only)
+        # Main frame (no longer needed - keeping for compatibility but not used)
         self.main_frame = ttk.Frame(self.root)
         
         # Control frame (left side) - now goes inside scrollable frame
@@ -416,7 +435,12 @@ class MainWindow:
         
         self.remove_dataset_btn = ttk.Button(actions_frame, text="Remove", 
                                             command=self.remove_dataset, state='disabled')
-        self.remove_dataset_btn.pack(side='left')
+        self.remove_dataset_btn.pack(side='left', padx=(0,5))
+        
+        # Help button
+        self.help_btn = ttk.Button(actions_frame, text="?", width=3,
+                                  command=self.show_help_dialog)
+        self.help_btn.pack(side='right')
         
         # Stats display
         self.stats_frame = ttk.LabelFrame(self.control_frame, text="Data Info", padding=5)
@@ -425,8 +449,8 @@ class MainWindow:
         self.stats_text = tk.Text(self.stats_frame, height=8, width=30)
         self.stats_text.pack(fill='both', expand=True)
         
-        # === PLOT FRAME (Right side - now the only right side frame) ===
-        self.plot_frame = ttk.LabelFrame(self.main_frame, text="Plot", padding=10)
+        # === PLOT FRAME (Right side - now inside its own scrollable frame) ===
+        self.plot_frame = ttk.LabelFrame(self.plot_scrollable_frame.scrollable_frame, text="Plot", padding=10)
         
         # Add navigation controls to plot frame (moved from dataset management)
         plot_nav_frame = ttk.Frame(self.plot_frame)
@@ -445,15 +469,18 @@ class MainWindow:
         self.control_frame.columnconfigure(1, weight=1)
     
     def _create_layout(self):
-        # Pack the scrollable frame and main frame
+        # Pack the left scrollable frame, and right plot scrollable frame
         self.scrollable_frame.pack(side='left', fill='y', padx=(5,5), pady=5)
-        self.main_frame.pack(side='left', fill='both', expand=True, padx=(0,5), pady=5)
+        self.plot_scrollable_frame.pack(side='left', fill='both', expand=True, padx=(0,5), pady=5)
         
-        # Pack the control frame inside the scrollable frame (already done in _create_widgets)
+        # Pack the control frame inside the left scrollable frame
         self.control_frame.pack(fill='both', expand=True, padx=5, pady=5)
         
-        # Pack the plot frame in the main frame
-        self.plot_frame.pack(fill='both', expand=True)
+        # Pack the plot frame inside the right scrollable frame
+        self.plot_frame.pack(fill='both', expand=True, padx=5, pady=5)
+        
+        # Remove the old main_frame since we're not using it anymore
+        # (plot_frame is now directly in plot_scrollable_frame)
         
         # Create placeholder for plot content (will be filled when plot is created)
         plot_content_frame = ttk.Frame(self.plot_frame)
@@ -1334,6 +1361,98 @@ class MainWindow:
         # Focus on text area
         notes_text.focus_set()
     
+    def show_help_dialog(self):
+        """Show help dialog with usage information."""
+        help_window = tk.Toplevel(self.root)
+        help_window.title("Dataset Management Help")
+        help_window.geometry("600x500")
+        help_window.grab_set()  # Make it modal
+        
+        # Center the dialog
+        help_window.transient(self.root)
+        help_window.update_idletasks()
+        x = (help_window.winfo_screenwidth() // 2) - 300
+        y = (help_window.winfo_screenheight() // 2) - 250
+        help_window.geometry(f"600x500+{x}+{y}")
+        
+        # Create main frame with padding
+        main_frame = ttk.Frame(help_window)
+        main_frame.pack(fill='both', expand=True, padx=20, pady=20)
+        
+        # Title
+        title_label = ttk.Label(main_frame, text="Dataset Management Help", 
+                               font=('TkDefaultFont', 14, 'bold'))
+        title_label.pack(anchor='w', pady=(0, 15))
+        
+        # Create scrollable text area for help content
+        text_frame = ttk.Frame(main_frame)
+        text_frame.pack(fill='both', expand=True, pady=(0, 15))
+        
+        help_text = tk.Text(text_frame, wrap='word', font=('TkDefaultFont', 10))
+        scrollbar = ttk.Scrollbar(text_frame, orient='vertical', command=help_text.yview)
+        help_text.configure(yscrollcommand=scrollbar.set)
+        
+        help_text.pack(side='left', fill='both', expand=True)
+        scrollbar.pack(side='right', fill='y')
+        
+        # Help content (placeholder for now)
+        help_content = """DATASET MANAGEMENT OVERVIEW
+
+This section helps you manage multiple datasets in the Particle Data Analyzer.
+
+LOADING DATA:
+• Use "Load CSV File" (Calibration mode) or "Load Data Files" (Verification mode)
+• The file preview dialog lets you set bead size and skip header rows
+• Each dataset gets a unique color and appears in the "Loaded Datasets" list
+
+DATASET LIST:
+• Shows all loaded datasets with bead size and filename
+• Click any dataset to make it active
+• The active dataset is highlighted and used for analysis
+
+BEAD SIZE EDITING:
+• Edit the bead size directly in the text field
+• Press Enter or click the save button (💾) to save changes
+• Only numeric values are accepted
+
+DATASET NAVIGATION:
+• Use "Previous Dataset" and "Next Dataset" buttons in the plot area
+• These buttons help you quickly switch between datasets
+
+DATASET ACTIONS:
+• Edit Notes: Add detailed information about each dataset
+• Remove: Delete a dataset from the collection (cannot be undone)
+
+ANALYSIS MODES:
+• Calibration Mode: Optimized for single dataset analysis
+• Verification Mode: Supports multiple datasets for comparison
+
+DATA TYPES:
+• Pre-aggregated: Data with size and frequency columns
+• Raw Measurements: Individual size measurements only
+
+TIPS:
+• Use meaningful bead sizes to identify your datasets
+• Add notes to remember important details about each dataset
+• In Verification mode, you can compare multiple datasets
+• The plot updates automatically when you switch datasets
+
+KEYBOARD SHORTCUTS:
+• Enter: Save bead size changes
+• Escape: Close dialogs
+
+For more detailed help, please refer to the user manual or contact support."""
+        
+        help_text.insert(1.0, help_content)
+        help_text.config(state='disabled')  # Make it read-only
+        
+        # Close button
+        close_button = ttk.Button(main_frame, text="Close", command=help_window.destroy)
+        close_button.pack(anchor='e')
+        
+        # Focus on the help window
+        help_window.focus_set()
+    
     def remove_dataset(self):
         """Remove the active dataset."""
         active_dataset = self.dataset_manager.get_active_dataset()
@@ -1401,7 +1520,7 @@ class MainWindow:
                 plt.close(self.current_figure)
                 self.current_figure = None
             
-            # Show the no plot message again
+                            # Show the no plot message again
             if not hasattr(self, 'no_plot_label') or not self.no_plot_label.winfo_exists():
                 plot_content_frame = ttk.Frame(self.plot_frame)
                 plot_content_frame.pack(fill='both', expand=True)
@@ -1411,6 +1530,11 @@ class MainWindow:
                                               foreground='gray',
                                               justify='center')
                 self.no_plot_label.pack(expand=True)
+        
+        # Update plot scroll region after clearing content
+        if hasattr(self, 'plot_scrollable_frame'):
+            self.root.update_idletasks()  # Ensure widgets are updated
+            self.plot_scrollable_frame.update_scroll_region()
         
         # Update scroll region after clearing
         self.scrollable_frame.update_scroll_region()
@@ -1752,6 +1876,16 @@ class MainWindow:
         # Add toolbar
         toolbar = NavigationToolbar2Tk(self.canvas, self.plot_frame)
         toolbar.update()
+        
+        # Force update of scroll region after matplotlib content is added
+        self.root.update_idletasks()  # Ensure all widgets are rendered
+        self.plot_scrollable_frame.update_scroll_region()
+        
+        # Debug: Print scroll region info
+        canvas = self.plot_scrollable_frame.canvas
+        scroll_region = canvas.cget('scrollregion')
+        canvas_height = canvas.winfo_height()
+        logger.info(f"Plot scroll region: {scroll_region}, canvas height: {canvas_height}")
     
     def _validate_float_input(self, value_if_allowed):
         """
@@ -1893,3 +2027,4 @@ class MainWindow:
             import sys
             sys.exit(0)
         
+    
