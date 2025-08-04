@@ -864,52 +864,52 @@ class MainWindow:
     #         messagebox.showerror("Error", "Please enter a valid number of points.")
 
     
-    # def _add_generated_dataset(self, data_processor, tag, notes):
-        """Add a generated dataset to the dataset manager."""
-        import uuid
-        from datetime import datetime
+    # # def _add_generated_dataset(self, data_processor, tag, notes):
+    #     """Add a generated dataset to the dataset manager."""
+    #     import uuid
+    #     from datetime import datetime
         
-        try:
-            # Create unique ID for this dataset
-            dataset_id = str(uuid.uuid4())
+    #     try:
+    #         # Create unique ID for this dataset
+    #         dataset_id = str(uuid.uuid4())
             
-            # Assign color
-            color = self.dataset_manager._get_next_color()
+    #         # Assign color
+    #         color = self.dataset_manager._get_next_color()
             
-            # Create dataset entry for generated data
-            dataset_info = {
-                'id': dataset_id,
-                'filename': 'Generated Data',
-                'file_path': None,  # No file path for generated data
-                'tag': tag,
-                'notes': notes,
-                'color': color,
-                'data_processor': data_processor,
-                'loaded_at': datetime.now(),
-                'skip_rows': 0,
-                # Store current analysis settings per dataset
-                'analysis_settings': {
-                    'data_mode': 'pre_aggregated',  # Generated data is always pre-aggregated
-                    'bin_count': 50,
-                    'size_column': data_processor.size_column,
-                    'frequency_column': data_processor.frequency_column,
-                    'show_stats_lines': True
-                }
-            }
+    #         # Create dataset entry for generated data
+    #         dataset_info = {
+    #             'id': dataset_id,
+    #             'filename': 'Generated Data',
+    #             'file_path': None,  # No file path for generated data
+    #             'tag': tag,
+    #             'notes': notes,
+    #             'color': color,
+    #             'data_processor': data_processor,
+    #             'loaded_at': datetime.now(),
+    #             'skip_rows': 0,
+    #             # Store current analysis settings per dataset
+    #             'analysis_settings': {
+    #                 'data_mode': 'pre_aggregated',  # Generated data is always pre-aggregated
+    #                 'bin_count': 50,
+    #                 'size_column': data_processor.size_column,
+    #                 'frequency_column': data_processor.frequency_column,
+    #                 'show_stats_lines': True
+    #             }
+    #         }
             
-            # Add to collection
-            self.dataset_manager.datasets[dataset_id] = dataset_info
+    #         # Add to collection
+    #         self.dataset_manager.datasets[dataset_id] = dataset_info
             
-            # Set as active if it's the first dataset
-            if self.dataset_manager.active_dataset_id is None:
-                self.dataset_manager.active_dataset_id = dataset_id
+    #         # Set as active if it's the first dataset
+    #         if self.dataset_manager.active_dataset_id is None:
+    #             self.dataset_manager.active_dataset_id = dataset_id
             
-            logger.info(f"Added generated dataset: {tag} (ID: {dataset_id})")
-            return dataset_id
+    #         logger.info(f"Added generated dataset: {tag} (ID: {dataset_id})")
+    #         return dataset_id
             
-        except Exception as e:
-            logger.error(f"Error adding generated dataset: {e}")
-            return None
+    #     except Exception as e:
+    #         logger.error(f"Error adding generated dataset: {e}")
+    #         return None
     
     # === FILE QUEUE PROCESSING METHODS ===
     
