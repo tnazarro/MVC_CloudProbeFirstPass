@@ -1464,23 +1464,42 @@ class MainWindow:
         
         quality = fit_result['fit_quality']
         
-        # Determine fit quality assessment
-        is_good_fit = (quality['r_squared'] >= 0.80 and 
-                    quality['reduced_chi_squared'] <= 2.0)
+        # UPDATED: Determine three-tier fit quality assessment
+        if hasattr(self.plotter.gaussian_fitter, 'get_fit_quality_category'):
+            quality_category = self.plotter.gaussian_fitter.get_fit_quality_category()
+            
+            if quality_category == 'good':
+                quality_status = "✓ Good Fit"
+                status_color = 'green'
+                explanation = "Excellent agreement between data and Gaussian model"
+            elif quality_category == 'okay':
+                quality_status = "~ Okay Fit"  
+                status_color = 'orange'
+                explanation = "Reasonable agreement with some deviations"
+            else:  # poor
+                quality_status = "⚠ Poor Fit"
+                status_color = 'red'
+                explanation = "Significant deviations from Gaussian model"
+        else:
+            # Fallback to old two-tier system
+            is_good_fit = (quality['r_squared'] >= 0.80 and 
+                        quality['reduced_chi_squared'] <= 2.0)
+            quality_status = "✓ Good Fit" if is_good_fit else "⚠ Poor Fit"
+            status_color = 'green' if is_good_fit else 'red'
+            explanation = ""
         
-        quality_status = "✓ Good Fit" if is_good_fit else "⚠ Poor Fit"
-        status_color = 'green' if is_good_fit else 'red'
-        
-        status_label = ttk.Label(quality_frame, text=quality_status, 
-                                font=('TkDefaultFont', 11, 'bold'))
-        status_label.pack(anchor='w', pady=(0, 10))
-        # Note: tkinter doesn't support foreground color on ttk.Label easily, 
-        # so we'll use a regular tk.Label for color
-        status_label.destroy()
+        # Display status with color
         status_label = tk.Label(quality_frame, text=quality_status,
                             font=('TkDefaultFont', 11, 'bold'),
                             fg=status_color)
-        status_label.pack(anchor='w', pady=(0, 10))
+        status_label.pack(anchor='w', pady=(0, 5))
+        
+        # Add explanation text
+        if explanation:
+            explanation_label = tk.Label(quality_frame, text=explanation,
+                                    font=('TkDefaultFont', 9),
+                                    fg='gray')
+            explanation_label.pack(anchor='w', pady=(0, 10))
         
         quality_data = [
             ['R-squared (R²)', f"{quality['r_squared']:.6f}"],
