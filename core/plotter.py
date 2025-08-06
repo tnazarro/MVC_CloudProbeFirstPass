@@ -196,9 +196,9 @@ class ParticlePlotter:
             logger.error(f"Error adding Gaussian curve: {e}")
     
     def _create_stats_text_with_gaussian(self, size_data: np.ndarray, 
-                                       frequency_data: Optional[np.ndarray],
-                                       data_mode: str, 
-                                       fit_result: Dict[str, Any]) -> str:
+                                    frequency_data: Optional[np.ndarray],
+                                    data_mode: str, 
+                                    fit_result: Dict[str, Any]) -> str:
         """Create statistics text including Gaussian fit parameters."""
         fit_params = fit_result['fitted_params']
         fit_quality = fit_result['fit_quality']
@@ -221,11 +221,15 @@ class ParticlePlotter:
         stats_text += f'  R²: {fit_quality["r_squared"]:.3f}\n'
         stats_text += f'  χ²: {fit_quality["reduced_chi_squared"]:.2f}'
         
-        # Add fit quality indicator
-        if self.gaussian_fitter.is_good_fit():
-            stats_text += ' ✓'
-        else:
-            stats_text += ' ⚠'
+        # UPDATED: Add three-tier fit quality indicator
+        if self.gaussian_fitter:
+            quality_category = self.gaussian_fitter.get_fit_quality_category()
+            if quality_category == 'good':
+                stats_text += ' ✓'
+            elif quality_category == 'okay':
+                stats_text += ' ~'  # or use ≈ or ✓̃
+            else:  # poor
+                stats_text += ' ⚠'
         
         return stats_text
     

@@ -286,21 +286,50 @@ Fit Quality:
 """
         return summary
     
-    def is_good_fit(self, min_r_squared: float = 0.80, max_reduced_chi_squared: float = 2.0) -> bool:
+    def get_fit_quality_category(self, good_r_squared: float = 0.85, okay_r_squared: float = 0.70,
+                            good_chi_squared: float = 1.5, okay_chi_squared: float = 3.0) -> str:
         """
-        Assess whether the last fit meets quality criteria.
+        Assess the fit quality in three categories: 'good', 'okay', or 'poor'.
         
         Args:
-            min_r_squared: Minimum acceptable R-squared value
-            max_reduced_chi_squared: Maximum acceptable reduced chi-squared
+            good_r_squared: Minimum R² for 'good' fit
+            okay_r_squared: Minimum R² for 'okay' fit  
+            good_chi_squared: Maximum reduced χ² for 'good' fit
+            okay_chi_squared: Maximum reduced χ² for 'okay' fit
             
         Returns:
-            True if fit meets quality criteria
+            str: 'good', 'okay', or 'poor'
         """
         if self.last_fit_quality is None:
-            return False
+            return 'poor'
         
-        r_squared_ok = self.last_fit_quality['r_squared'] >= min_r_squared
-        chi_squared_ok = self.last_fit_quality['reduced_chi_squared'] <= max_reduced_chi_squared
+        r_squared = self.last_fit_quality['r_squared']
+        reduced_chi_squared = self.last_fit_quality['reduced_chi_squared']
         
-        return r_squared_ok and chi_squared_ok
+        # Good fit: both metrics meet high standards
+        if r_squared >= good_r_squared and reduced_chi_squared <= good_chi_squared:
+            return 'good'
+        
+        # Okay fit: both metrics meet moderate standards OR one is good and other is okay
+        elif ((r_squared >= okay_r_squared and reduced_chi_squared <= okay_chi_squared) or
+            (r_squared >= good_r_squared and reduced_chi_squared <= okay_chi_squared) or  
+            (r_squared >= okay_r_squared and reduced_chi_squared <= good_chi_squared)):
+            return 'okay'
+        
+        # Poor fit: fails to meet even moderate standards
+        else:
+            return 'poor'
+
+    # Keep the original method for backward compatibility, but make it use the new logic
+    def is_good_fit(self, min_r_squared: float = 0.85, max_reduced_chi_squared: float = 1.5) -> bool:
+        """
+        Assess whether the last fit meets quality criteria (backward compatibility).
+        Now returns True only for 'good' fits.
+        """
+        return self.get_fit_quality_category() == 'good'
+
+    # Add a new method for checking if fit is at least okay
+    def is_acceptable_fit(self) -> bool:
+        """Check if fit is at least 'okay' quality."""
+        quality = self.get_fit_quality_category()
+        return quality in ['good', 'okay']
