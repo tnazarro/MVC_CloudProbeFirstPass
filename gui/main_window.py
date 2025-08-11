@@ -156,6 +156,10 @@ class MainWindow:
         
         # Track current figure for proper cleanup
         self.current_figure = None
+
+        # Drag-and-drop support
+        self.drag_item = None
+        self.drag_start_y = None
         
         # Report generation
         if REPORTS_AVAILABLE:
@@ -264,6 +268,9 @@ class MainWindow:
         dataset_scrollbar_x = ttk.Scrollbar(list_container, orient='horizontal', command=self.dataset_treeview.xview)
         
         self.dataset_treeview.configure(yscrollcommand=dataset_scrollbar_y.set, xscrollcommand=dataset_scrollbar_x.set)
+        self.dataset_treeview.bind('<ButtonPress-1>', self._on_treeview_button_press)
+        self.dataset_treeview.bind('<B1-Motion>', self._on_treeview_drag_motion)
+        self.dataset_treeview.bind('<ButtonRelease-1>', self._on_treeview_button_release)
         self.dataset_treeview.bind('<<TreeviewSelect>>', self._on_dataset_select)
         
         # Grid layout for treeview and scrollbars
@@ -366,21 +373,21 @@ class MainWindow:
                                        command=self._on_data_mode_change)
         self.raw_radio.grid(row=1, column=0, sticky='w')
         
-        # Column selection
-        ttk.Label(self.control_frame, text="Size Column:").grid(row=9, column=0, sticky='w', pady=2)
+        #Column selection
+        ttk.Label(self.control_frame, text="Size Column:").grid(row=6, column=0, sticky='w', pady=2)  # Fixed: was row=9
         self.size_combo = ttk.Combobox(self.control_frame, textvariable=self.size_column_var, 
-                                      state='readonly')
+                                    state='readonly')
         self.size_combo.grid(row=6, column=1, sticky='ew', pady=2)
         self.size_combo.bind('<<ComboboxSelected>>', self._on_column_change)
-        
+
         self.frequency_label = ttk.Label(self.control_frame, text="Frequency Column:")
         self.frequency_label.grid(row=7, column=0, sticky='w', pady=2)
         self.frequency_combo = ttk.Combobox(self.control_frame, textvariable=self.frequency_column_var, 
-                                           state='readonly')
+                                        state='readonly')
         self.frequency_combo.grid(row=7, column=1, sticky='ew', pady=2)
         self.frequency_combo.bind('<<ComboboxSelected>>', self._on_column_change)
-        
-        # Bin count control
+
+        # Bin count control (FIXED ROW NUMBER)
         ttk.Label(self.control_frame, text="Bins:").grid(row=8, column=0, sticky='w', pady=2)
 
         # Create frame for bin controls
@@ -1204,15 +1211,16 @@ class MainWindow:
         self._update_tag_editor()  # NEW: Update tag editor
     
     def _update_dataset_treeview(self):
-        """Update the dataset treeview with current datasets."""
+        """Update the dataset treeview with current datasets in manager order."""
         # Clear existing items
         for item in self.dataset_treeview.get_children():
             self.dataset_treeview.delete(item)
         
-        datasets = self.dataset_manager.get_all_datasets()
+        # Use the manager's internal order (not get_all_datasets which might sort)
+        datasets_in_order = list(self.dataset_manager.datasets.values())
         active_id = self.dataset_manager.active_dataset_id
         
-        for i, dataset in enumerate(datasets):
+        for i, dataset in enumerate(datasets_in_order):
             # Determine filename display
             if dataset['filename'] != 'Generated Data':
                 filename_display = dataset['filename']
@@ -2219,7 +2227,235 @@ For more detailed help, please refer to the user manual or contact support."""
                             hasattr(self.plotter, 'get_last_gaussian_fit') and
                             self.plotter.get_last_gaussian_fit() is not None)
             self.gaussian_info_btn.config(state='normal' if has_gaussian_fit else 'disabled')
+
+    def _on_treeview_button_press(self, event):
+        """Handle mouse button press on treeview - start drag operation."""
+        widget = event.widget
+        item = widget.identify_row(event.y)
         
+        # Reset cursor first
+        widget.configure(cursor="")
+        
+        if item:
+            # Store drag information
+            self.drag_item = item
+            self.drag_start_y = event.y
+            
+            # Select the item being dragged if it's not already selected
+            if item not in widget.selection():
+                widget.selection_set(item)
+                # Also trigger the selection handler to make this dataset active
+                self._on_dataset_select(event)
+        else:
+            # Clear drag if clicking on empty space
+            self.drag_item = None
+            self.drag_start_y = None
+
+    def _on_treeview_drag_motion(self, event):
+        """Handle mouse motion during drag - provide visual feedback."""
+        if self.drag_item is None:
+            return
+        
+        # Check if we've moved enough to start dragging (prevent accidental drags)
+        if self.drag_start_y is not None and abs(event.y - self.drag_start_y) < 5:
+            return
+        
+        widget = event.widget
+        target_item = widget.identify_row(event.y)
+        
+        # Change cursor to indicate drag operation
+        if target_item and target_item != self.drag_item:
+            widget.configure(cursor="hand2")
+        else:
+            widget.configure(cursor="")
+
+    def _on_treeview_button_release(self, event):
+        """Handle mouse button release - complete drag operation."""
+        widget = event.widget
+        
+        # Always reset cursor
+        widget.configure(cursor="")
+        
+        if self.drag_item is None:
+            return
+        
+        target_item = widget.identify_row(event.y)
+        
+        # Only reorder if we have a valid target that's different from drag item
+        if target_item and target_item != self.drag_item:
+            # Check if we actually moved enough to constitute a drag
+            if self.drag_start_y is not None and abs(event.y - self.drag_start_y) >= 5:
+                self._reorder_datasets(self.drag_item, target_item, event.y)
+        
+        # Clean up drag state
+        self.drag_item = None
+        self.drag_start_y = None
+
+    def _reorder_datasets(self, drag_item, target_item, drop_y):
+        """Reorder datasets in both treeview and dataset manager."""
+        # DEBUG: Uncomment this line to see order comparison
+        # self.debug_orders_comparison()
+        
+        try:
+            # Get the dataset IDs from the treeview items BY LOOKING UP THE ACTUAL DATA
+            all_items = list(self.dataset_treeview.get_children())
+            
+            # Create a mapping from treeview items to dataset IDs
+            item_to_dataset_id = {}
+            all_datasets = self.dataset_manager.get_all_datasets()
+            
+            for i, item in enumerate(all_items):
+                values = self.dataset_treeview.item(item, 'values')
+                if values and i < len(all_datasets):
+                    # Match by tag and filename to find the correct dataset
+                    tag, filename = values
+                    for dataset in all_datasets:
+                        if dataset['tag'] == tag and dataset['filename'] == filename:
+                            item_to_dataset_id[item] = dataset['id']
+                            break
+            
+            # Get the actual dataset IDs
+            drag_dataset_id = item_to_dataset_id.get(drag_item)
+            target_dataset_id = item_to_dataset_id.get(target_item)
+            
+            if not drag_dataset_id or not target_dataset_id:
+                logger.warning("Could not find dataset IDs for drag items")
+                return
+            
+            # Find the indices in the MANAGER's order (not treeview order)
+            dataset_ids_ordered = self.dataset_manager.get_dataset_order_by_id()
+            
+            try:
+                drag_index = dataset_ids_ordered.index(drag_dataset_id)
+                target_index = dataset_ids_ordered.index(target_dataset_id)
+            except ValueError as e:
+                logger.error(f"Dataset ID not found in manager: {e}")
+                return
+            
+            # Don't do anything if trying to drop on the same item
+            if drag_index == target_index:
+                logger.info("Drag and target are the same - no reorder needed")
+                return
+            
+            # Get the dataset info for logging
+            drag_dataset = self.dataset_manager.get_dataset(drag_dataset_id)
+            target_dataset = self.dataset_manager.get_dataset(target_dataset_id)
+            
+            logger.info(f"Reordering: moving '{drag_dataset['tag']}' (manager index {drag_index}) near '{target_dataset['tag']}' (manager index {target_index})")
+            
+            # Determine drop position (above or below target)
+            try:
+                target_bbox = self.dataset_treeview.bbox(target_item)
+                if target_bbox:
+                    target_center_y = target_bbox[1] + target_bbox[3] // 2
+                    drop_above = drop_y < target_center_y
+                else:
+                    drop_above = drag_index > target_index  # Default behavior
+            except:
+                drop_above = drag_index > target_index
+            
+            logger.info(f"Drop above target: {drop_above}")
+            
+            # Calculate new position in manager order
+            if drag_index < target_index:
+                # Dragging DOWN (from earlier position to later position)
+                if drop_above:
+                    new_position = target_index - 1  # Insert before target
+                else:
+                    new_position = target_index  # Insert after target (target moves up)
+            else:
+                # Dragging UP (from later position to earlier position) 
+                if drop_above:
+                    new_position = target_index  # Insert before target (target moves down)
+                else:
+                    new_position = target_index + 1  # Insert after target
+            
+            # Ensure position is within bounds
+            new_position = max(0, min(new_position, len(dataset_ids_ordered) - 1))
+            
+            logger.info(f"Calculated new position in manager: {new_position}")
+            
+            # Don't do anything if position hasn't actually changed
+            if new_position == drag_index:
+                logger.info("New position same as old position - no reorder needed")
+                return
+            
+            # Perform the reorder in the dataset manager
+            self._reorder_datasets_in_manager(drag_dataset_id, new_position)
+            
+            # Update the UI (this will rebuild the treeview from the manager's new order)
+            self._update_dataset_ui()
+            
+            # Maintain selection on the moved item
+            # We need to find the new treeview item for this dataset
+            updated_items = list(self.dataset_treeview.get_children())
+            for item in updated_items:
+                values = self.dataset_treeview.item(item, 'values')
+                if values:
+                    tag, filename = values
+                    if tag == drag_dataset['tag'] and filename == drag_dataset['filename']:
+                        self.dataset_treeview.selection_set(item)
+                        self.dataset_treeview.see(item)
+                        break
+            
+            logger.info(f"Successfully reordered datasets from manager position {drag_index} to {new_position}")
+            
+        except Exception as e:
+            logger.error(f"Error reordering datasets: {e}")
+            messagebox.showerror("Reorder Error", f"Failed to reorder datasets: {str(e)}")
+
+    def _reorder_datasets_in_manager(self, dataset_id: str, new_position: int):
+        """Reorder datasets in the dataset manager."""
+        datasets = list(self.dataset_manager.datasets.items())
+        
+        # Find the dataset to move
+        dataset_to_move = None
+        old_position = None
+        
+        for i, (id, dataset) in enumerate(datasets):
+            if id == dataset_id:
+                dataset_to_move = (id, dataset)
+                old_position = i
+                break
+        
+        if dataset_to_move is None:
+            raise ValueError(f"Dataset {dataset_id} not found")
+        
+        # Validate new position bounds
+        if new_position < 0:
+            new_position = 0
+        elif new_position >= len(datasets):
+            new_position = len(datasets) - 1
+        
+        print(f"DEBUG: Moving '{dataset_to_move[1]['tag']}' from position {old_position} to {new_position}")
+        
+        # Remove from old position
+        datasets.pop(old_position)
+        
+        # Insert at new position
+        datasets.insert(new_position, dataset_to_move)
+        
+        # Rebuild the datasets dictionary in the new order
+        new_datasets = {}
+        for id, dataset in datasets:
+            new_datasets[id] = dataset
+        
+        # Replace the manager's datasets
+        self.dataset_manager.datasets = new_datasets
+        
+        # print(f"DEBUG: Reorder complete - new order:")
+        # for i, (id, dataset) in enumerate(datasets):
+        #     print(f"  {i}: {dataset['tag']}")
+        
+        logger.info(f"Moved dataset {dataset_id} from position {old_position} to {new_position}")
+
+    def debug_dataset_order(self):
+        """Debug method to print current dataset order."""
+        datasets = self.dataset_manager.get_all_datasets()
+        print("=== Current Dataset Order ===")
+        for i, dataset in enumerate(datasets):
+            print(f"{i}: {dataset['tag']} - {dataset['filename']}")
+        print("=============================")
     
     def _on_closing(self):
         """Handle application closing cleanly."""
@@ -2247,4 +2483,28 @@ For more detailed help, please refer to the user manual or contact support."""
             import sys
             sys.exit(0)
         
-    
+    def debug_orders_comparison(self):
+        """Debug method to compare treeview order vs manager order."""
+        print("\n=== ORDER COMPARISON DEBUG ===")
+        
+        # Get treeview order
+        treeview_items = list(self.dataset_treeview.get_children())
+        all_datasets = self.dataset_manager.get_all_datasets()
+        
+        print("TREEVIEW ORDER:")
+        for i, item in enumerate(treeview_items):
+            values = self.dataset_treeview.item(item, 'values')
+            if values:
+                tag, filename = values
+                print(f"  {i}: {tag} - {filename}")
+        
+        print("\nMANAGER ORDER:")
+        manager_datasets = self.dataset_manager.get_all_datasets()
+        for i, dataset in enumerate(manager_datasets):
+            print(f"  {i}: {dataset['tag']} - {dataset['filename']}")
+        
+        print("\nMANAGER INTERNAL DICT ORDER:")
+        for i, (id, dataset) in enumerate(self.dataset_manager.datasets.items()):
+            print(f"  {i}: {id[:8]}... -> {dataset['tag']} - {dataset['filename']}")
+        
+        print("===============================\n")
