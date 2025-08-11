@@ -210,3 +210,11 @@ class DatasetManager:
         self.active_dataset_id = None
         self._next_color_index = 0
         logger.info("Cleared all datasets")
+
+    def get_dataset_order_by_id(self) -> List[str]:
+        """Get dataset IDs in their current order."""
+        return list(self.datasets.keys())
+
+    def get_all_datasets_ordered(self) -> List[Dict[str, Any]]:
+        """Get all datasets in the order they appear in the internal dictionary."""
+        return list(self.datasets.values()) 
