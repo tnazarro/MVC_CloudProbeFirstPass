@@ -12,7 +12,7 @@ from core.data_processor import ParticleDataProcessor
 logger = logging.getLogger(__name__)
 
 class FilePreviewDialog:
-    """Enhanced dialog for previewing CSV files with configurable filtering options."""
+    """Enhanced dialog for previewing CSV files with configurable filtering options and instrument type detection."""
     
     def __init__(self, parent, file_path: str, on_load_callback: Callable[[str, str, int], None]):
         """
@@ -38,10 +38,11 @@ class FilePreviewDialog:
         # UI widgets
         self.preview_text = None
         self.status_label = None
+        self.instrument_type_label = None  # NEW: For displaying detected instrument type
         
     def show(self) -> None:
         """Show the preview dialog."""
-        # Get initial preview data
+        # Get initial preview data (now includes instrument type detection)
         temp_processor = ParticleDataProcessor()
         self.preview_data = temp_processor.preview_csv(self.file_path, preview_rows=15)
         
@@ -93,6 +94,16 @@ class FilePreviewDialog:
         self.columns_label = ttk.Label(
             self.info_frame, 
             text=f"Detected columns: {self.preview_data['detected_columns']}"
+        )
+        
+        # NEW: Instrument type display
+        instrument_type = self.preview_data.get('instrument_type', 'Unknown')
+        instrument_color = 'green' if instrument_type != 'Unknown' else 'orange'
+        self.instrument_type_label = ttk.Label(
+            self.info_frame,
+            text=f"Instrument Type: {instrument_type}",
+            font=('TkDefaultFont', 9, 'bold'),
+            foreground=instrument_color
         )
         
         # Preview controls section
@@ -165,6 +176,7 @@ class FilePreviewDialog:
         self.file_label.pack(anchor='w')
         self.lines_label.pack(anchor='w')
         self.columns_label.pack(anchor='w')
+        self.instrument_type_label.pack(anchor='w')  # NEW: Display instrument type
         
         # Preview controls
         self.preview_control_frame.pack(fill='x', padx=10, pady=5)
@@ -231,7 +243,7 @@ class FilePreviewDialog:
         self.preview_text.config(state='disabled')
         
     def _refresh_preview(self) -> None:
-        """Refresh the preview with new line count."""
+        """Refresh the preview with new line count and re-detect instrument type."""
         try:
             num_lines = self.preview_lines_var.get()
             if num_lines < 1:
@@ -241,7 +253,7 @@ class FilePreviewDialog:
                 num_lines = 1000
                 self.preview_lines_var.set(1000)
             
-            # Get new preview data
+            # Get new preview data (includes re-detection of instrument type)
             temp_processor = ParticleDataProcessor()
             new_preview_data = temp_processor.preview_csv(self.file_path, preview_rows=num_lines)
             
@@ -251,6 +263,18 @@ class FilePreviewDialog:
                     text=f"✓ Showing first {len(new_preview_data['preview_lines'])} lines",
                     foreground='green'
                 )
+                
+                # Update instrument type display
+                instrument_type = new_preview_data.get('instrument_type', 'Unknown')
+                instrument_color = 'green' if instrument_type != 'Unknown' else 'orange'
+                self.instrument_type_label.config(
+                    text=f"Instrument Type: {instrument_type}",
+                    foreground=instrument_color
+                )
+                
+                # Store updated preview data
+                self.preview_data = new_preview_data
+                
             else:
                 messagebox.showerror(
                     "Preview Error", 
