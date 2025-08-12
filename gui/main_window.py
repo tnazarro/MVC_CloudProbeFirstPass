@@ -1002,18 +1002,7 @@ class MainWindow:
             ttk.Label(info_frame, text=f"File: {file_info['filename']}", font=('TkDefaultFont', 9, 'bold')).pack(anchor='w')
             ttk.Label(info_frame, text=f"Total lines: {preview_data['total_lines']}").pack(anchor='w')
             ttk.Label(info_frame, text=f"Detected columns: {preview_data['detected_columns']}").pack(anchor='w')
-
-            # NEW: Display detected instrument type in queue preview
-            instrument_type = preview_data.get('instrument_type', 'Unknown')
-            instrument_color = 'green' if instrument_type != 'Unknown' else 'orange'
-            instrument_label = ttk.Label(
-                info_frame,
-                text=f"Instrument Type: {instrument_type}",
-                font=('TkDefaultFont', 9, 'bold'),
-                foreground=instrument_color
-            )
-            instrument_label.pack(anchor='w')
-
+            
             # Preview text section
             preview_section = ttk.LabelFrame(preview_window, text="File Preview", padding=5)
             preview_section.pack(fill='both', expand=True, padx=10, pady=5)
@@ -1268,10 +1257,6 @@ class MainWindow:
             else:
                 info_parts.append("File: Generated Data")
             
-            # NEW: Instrument type display
-            instrument_type = active_dataset.get('instrument_type', 'Unknown')
-            info_parts.append(f"Instrument: {instrument_type}")
-            
             # Notes preview (first 50 chars if present)
             if active_dataset['notes']:
                 notes_preview = active_dataset['notes'][:50]
@@ -1288,7 +1273,7 @@ class MainWindow:
             self.compact_info_label.config(text=info_text)
         else:
             self.compact_info_label.config(text="No datasets loaded")
-
+    
     def _update_navigation_buttons(self):
         """Update the state of navigation and action buttons."""
         has_datasets = self.dataset_manager.has_datasets()
@@ -1915,7 +1900,6 @@ For more detailed help, please refer to the user manual or contact support."""
         # Dataset info
         stats_str = f"Dataset: {active_dataset['tag']}\n"
         stats_str += f"File: {active_dataset['filename']}\n"
-        stats_str += f"Instrument: {active_dataset.get('instrument_type', 'Unknown')}\n"  # NEW: Display instrument type
         stats_str += f"Rows: {stats.get('total_rows', 'N/A')}\n"
         stats_str += f"Columns: {stats.get('total_columns', 'N/A')}\n"
         stats_str += f"Mode: {stats.get('data_mode', 'N/A')}\n"
