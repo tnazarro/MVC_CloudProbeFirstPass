@@ -1,5 +1,5 @@
 """
-Dataset manager for handling multiple particle analysis datasets with instrument type support.
+Dataset manager for handling multiple particle analysis datasets.
 """
 
 import logging
@@ -64,9 +64,6 @@ class DatasetManager:
             # Assign color
             color = self._get_next_color()
             
-            # Get detected instrument type from the data processor
-            instrument_type = data_processor.get_instrument_type()
-            
             # Create dataset entry
             dataset_info = {
                 'id': dataset_id,
@@ -78,7 +75,6 @@ class DatasetManager:
                 'data_processor': data_processor,
                 'loaded_at': datetime.now(),
                 'skip_rows': skip_rows,
-                'instrument_type': instrument_type,  # NEW: Store detected instrument type
                 # Store current analysis settings per dataset
                 'analysis_settings': {
                     'data_mode': 'raw_measurements',
@@ -97,45 +93,12 @@ class DatasetManager:
             if self.active_dataset_id is None:
                 self.active_dataset_id = dataset_id
             
-            logger.info(f"Added dataset: {filename} with tag '{tag}' and instrument type '{instrument_type}' (ID: {dataset_id})")
+            logger.info(f"Added dataset: {filename} with tag '{tag}' (ID: {dataset_id})")
             return dataset_id
             
         except Exception as e:
             logger.error(f"Error adding dataset from {file_path}: {e}")
             return None
-    
-    def update_dataset_instrument_type(self, dataset_id: str, new_instrument_type: str) -> bool:
-        """
-        Update the instrument type for a dataset.
-        
-        Args:
-            dataset_id: ID of the dataset to update
-            new_instrument_type: New instrument type string
-            
-        Returns:
-            bool: True if successful, False if dataset not found
-        """
-        if dataset_id in self.datasets:
-            self.datasets[dataset_id]['instrument_type'] = new_instrument_type
-            # Also update the data processor
-            self.datasets[dataset_id]['data_processor'].set_instrument_type(new_instrument_type)
-            logger.info(f"Updated instrument type for dataset {dataset_id} to '{new_instrument_type}'")
-            return True
-        return False
-    
-    def get_dataset_instrument_type(self, dataset_id: str) -> Optional[str]:
-        """
-        Get the instrument type for a specific dataset.
-        
-        Args:
-            dataset_id: ID of the dataset
-            
-        Returns:
-            str: Instrument type or None if dataset not found
-        """
-        if dataset_id in self.datasets:
-            return self.datasets[dataset_id]['instrument_type']
-        return None
     
     def remove_dataset(self, dataset_id: str) -> bool:
         """Remove a dataset from the collection."""
@@ -254,4 +217,4 @@ class DatasetManager:
 
     def get_all_datasets_ordered(self) -> List[Dict[str, Any]]:
         """Get all datasets in the order they appear in the internal dictionary."""
-        return list(self.datasets.values())
+        return list(self.datasets.values()) 
