@@ -974,7 +974,7 @@ class MainWindow:
 
     def _show_enhanced_queue_preview_dialog(self, preview_data, file_info):
             """Show enhanced preview dialog for queue processing."""
-            # Create the dialog window (this was missing the local variable assignment!)
+            # Create the dialog window 
             preview_window = tk.Toplevel(self.root)
             preview_window.title(f"Queue Preview - {file_info['filename']}")
             preview_window.geometry("950x800")
@@ -1003,7 +1003,6 @@ class MainWindow:
             ttk.Label(info_frame, text=f"Total lines: {preview_data['total_lines']}").pack(anchor='w')
             ttk.Label(info_frame, text=f"Detected columns: {preview_data['detected_columns']}").pack(anchor='w')
 
-            # NEW: Display detected instrument type in queue preview
             instrument_type = preview_data.get('instrument_type', 'Unknown')
             instrument_color = 'green' if instrument_type != 'Unknown' else 'orange'
             instrument_label = ttk.Label(

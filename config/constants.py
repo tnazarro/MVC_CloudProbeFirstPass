@@ -32,3 +32,11 @@ PLOT_WIDTH = 8
 PLOT_HEIGHT = 6
 PLOT_DPI = 100
 
+# CSV file encoding support (in order of likelihood for particle analysis data)
+SUPPORTED_CSV_ENCODINGS = [
+    'utf-8',           # Most common modern encoding
+    'windows-1252',    # Common Windows encoding
+    'iso-8859-1',      # Latin-1, common in scientific instruments
+    'cp1252',          # Windows code page 1252
+    'latin1'           # Alias for iso-8859-1, backup option
+]
