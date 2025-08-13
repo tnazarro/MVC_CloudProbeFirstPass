@@ -1,5 +1,5 @@
 """
-Dataset manager for handling multiple particle analysis datasets with instrument type support.
+Dataset manager for handling multiple particle analysis datasets with instrument type support. Focused on handling the list of active datasets, their metadata, and analysis settings.
 """
 
 import logging
@@ -78,7 +78,7 @@ class DatasetManager:
                 'data_processor': data_processor,
                 'loaded_at': datetime.now(),
                 'skip_rows': skip_rows,
-                'instrument_type': instrument_type,  # NEW: Store detected instrument type
+                'instrument_type': instrument_type,
                 # Store current analysis settings per dataset
                 'analysis_settings': {
                     'data_mode': 'raw_measurements',
@@ -126,12 +126,6 @@ class DatasetManager:
     def get_dataset_instrument_type(self, dataset_id: str) -> Optional[str]:
         """
         Get the instrument type for a specific dataset.
-        
-        Args:
-            dataset_id: ID of the dataset
-            
-        Returns:
-            str: Instrument type or None if dataset not found
         """
         if dataset_id in self.datasets:
             return self.datasets[dataset_id]['instrument_type']
