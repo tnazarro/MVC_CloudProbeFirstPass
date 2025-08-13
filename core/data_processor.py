@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 import logging
 from typing import Tuple, List, Optional
-from config.constants import SIZE_COLUMN_NAMES, FREQUENCY_COLUMN_NAMES, RANDOM_DATA_BOUNDS
+from config.constants import SIZE_COLUMN_NAMES, FREQUENCY_COLUMN_NAMES, RANDOM_DATA_BOUNDS, SUPPORTED_CSV_ENCODINGS
 
 logger = logging.getLogger(__name__)
 
@@ -31,17 +31,14 @@ class ParticleDataProcessor:
         Returns:
             str: Detected instrument type or "Unknown" if not found
         """
-        # Try different encodings in order of likelihood
-        encodings_to_try = ['utf-8', 'windows-1252', 'iso-8859-1', 'cp1252', 'latin1']
-        
-        for encoding in encodings_to_try:
+        for encoding in SUPPORTED_CSV_ENCODINGS:
             try:
                 with open(file_path, 'r', encoding=encoding) as f:
                     for line_num, line in enumerate(f):
                         if line_num >= max_lines:
                             break
                         
-                        # Look for "Instrument Type =" (case-insensitive)
+                        # Look for "Instrument Type=" (case-insensitive)
                         line_clean = line.strip()
                         if "instrument type=" in line_clean.lower():
                             # Extract the part after "Instrument Type="
@@ -72,13 +69,11 @@ class ParticleDataProcessor:
         logger.warning(f"Failed to detect instrument type with any supported encoding")
         self.instrument_type = "Unknown"
         return "Unknown"
+
     
     def get_instrument_type(self) -> str:
         """
         Get the detected or set instrument type.
-        
-        Returns:
-            str: Current instrument type
         """
         return self.instrument_type
     
@@ -107,10 +102,7 @@ class ParticleDataProcessor:
         # First, detect instrument type before loading the data
         self.detect_instrument_type(file_path)
         
-        # Try different encodings in order of likelihood
-        encodings_to_try = ['utf-8', 'windows-1252', 'iso-8859-1', 'cp1252', 'latin1']
-        
-        for encoding in encodings_to_try:
+        for encoding in SUPPORTED_CSV_ENCODINGS:
             try:
                 # Load CSV with row skipping and encoding
                 if skip_rows > 0:
@@ -133,7 +125,7 @@ class ParticleDataProcessor:
                 continue
         
         # If all encodings failed
-        logger.error(f"Failed to load CSV with any supported encoding. Tried: {', '.join(encodings_to_try)}")
+        logger.error(f"Failed to load CSV with any supported encoding. Tried: {', '.join(SUPPORTED_CSV_ENCODINGS)}")
         return False
     
     def _detect_columns(self):
@@ -239,7 +231,7 @@ class ParticleDataProcessor:
             'total_rows': len(self.data),
             'total_columns': len(self.data.columns),
             'data_mode': self.data_mode,
-            'instrument_type': self.instrument_type  # NEW: Include instrument type in stats
+            'instrument_type': self.instrument_type 
         }
         
         if self.size_column:
@@ -274,10 +266,7 @@ class ParticleDataProcessor:
         Returns:
             dict: Contains preview data, total rows, columns info, and instrument type
         """
-        # Try different encodings in order of likelihood
-        encodings_to_try = ['utf-8', 'windows-1252', 'iso-8859-1', 'cp1252', 'latin1']
-        
-        for encoding in encodings_to_try:
+        for encoding in SUPPORTED_CSV_ENCODINGS:
             try:
                 # First detect instrument type
                 detected_instrument = self.detect_instrument_type(file_path)
@@ -306,7 +295,7 @@ class ParticleDataProcessor:
                     'detected_columns': detected_columns,
                     'column_names': columns,
                     'encoding_used': encoding,
-                    'instrument_type': detected_instrument  # NEW: Include detected instrument type
+                    'instrument_type': detected_instrument
                 }
                 
             except UnicodeDecodeError:
@@ -319,8 +308,8 @@ class ParticleDataProcessor:
         # If all encodings failed
         return {
             'success': False,
-            'error': f"Could not read file with any supported encoding. Tried: {', '.join(encodings_to_try)}",
-            'instrument_type': "Unknown"  # NEW: Include unknown instrument type even on failure
+            'error': f"Could not read file with any supported encoding. Tried: {', '.join(SUPPORTED_CSV_ENCODINGS)}",
+            'instrument_type': "Unknown"
         }
     
     def generate_random_data(self, n: int = None, distribution: str = 'lognormal') -> bool:

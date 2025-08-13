@@ -38,11 +38,11 @@ class FilePreviewDialog:
         # UI widgets
         self.preview_text = None
         self.status_label = None
-        self.instrument_type_label = None  # NEW: For displaying detected instrument type
+        self.instrument_type_label = None
         
     def show(self) -> None:
         """Show the preview dialog."""
-        # Get initial preview data (now includes instrument type detection)
+        # Get initial preview data 
         temp_processor = ParticleDataProcessor()
         self.preview_data = temp_processor.preview_csv(self.file_path, preview_rows=15)
         
