@@ -1029,7 +1029,7 @@ class MainWindow:
                 preview_text.insert(tk.END, f"{i:3d}: {line}\n")
             preview_text.config(state='disabled')
             
-            # Filter controls section (MOVED TAG EDITING HERE to match single-file dialog)
+            # Filter controls section 
             filter_frame = ttk.LabelFrame(preview_window, text="Data Filtering Options", padding=10)
             filter_frame.pack(fill='x', padx=10, pady=5)
             
@@ -1037,7 +1037,7 @@ class MainWindow:
             filter_row = ttk.Frame(filter_frame)
             filter_row.pack(fill='x')
             
-            # Tag editing with float validation (repositioned to match single-file layout)
+            # Tag editing with float validation
             ttk.Label(filter_row, text="Bead Size (μm):").grid(row=0, column=0, sticky='w', padx=(0,5))
             tag_var = tk.StringVar(value=file_info['auto_tag'])
             
@@ -1053,7 +1053,7 @@ class MainWindow:
             )
             tag_entry.grid(row=0, column=1, sticky='w', padx=5)
             
-            # Skip rows control (moved to same row structure)
+            # Skip rows control
             ttk.Label(filter_row, text="Skip rows from top:").grid(row=1, column=0, sticky='w', pady=(10,0), padx=(0,5))
             skip_var = tk.IntVar(value=file_info['skip_rows'])
             skip_entry = ttk.Entry(filter_row, textvariable=skip_var, width=6)
@@ -1267,8 +1267,7 @@ class MainWindow:
             else:
                 info_parts.append("File: Generated Data")
             
-            # NEW: Instrument type display
-            instrument_type = active_dataset.get('instrument_type', 'Unknown')
+            instrument_type = active_dataset['data_processor'].get_instrument_type()
             info_parts.append(f"Instrument: {instrument_type}")
             
             # Notes preview (first 50 chars if present)
@@ -1914,7 +1913,7 @@ For more detailed help, please refer to the user manual or contact support."""
         # Dataset info
         stats_str = f"Dataset: {active_dataset['tag']}\n"
         stats_str += f"File: {active_dataset['filename']}\n"
-        stats_str += f"Instrument: {active_dataset.get('instrument_type', 'Unknown')}\n"  # NEW: Display instrument type
+        stats_str += f"Instrument: {stats.get('instrument_type', 'Unknown')}\n"
         stats_str += f"Rows: {stats.get('total_rows', 'N/A')}\n"
         stats_str += f"Columns: {stats.get('total_columns', 'N/A')}\n"
         stats_str += f"Mode: {stats.get('data_mode', 'N/A')}\n"

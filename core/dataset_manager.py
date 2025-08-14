@@ -116,8 +116,6 @@ class DatasetManager:
             bool: True if successful, False if dataset not found
         """
         if dataset_id in self.datasets:
-            self.datasets[dataset_id]['instrument_type'] = new_instrument_type
-            # Also update the data processor
             self.datasets[dataset_id]['data_processor'].set_instrument_type(new_instrument_type)
             logger.info(f"Updated instrument type for dataset {dataset_id} to '{new_instrument_type}'")
             return True
@@ -128,7 +126,7 @@ class DatasetManager:
         Get the instrument type for a specific dataset.
         """
         if dataset_id in self.datasets:
-            return self.datasets[dataset_id]['instrument_type']
+            return self.datasets[dataset_id]['data_processor'].get_instrument_type()
         return None
     
     def remove_dataset(self, dataset_id: str) -> bool:
