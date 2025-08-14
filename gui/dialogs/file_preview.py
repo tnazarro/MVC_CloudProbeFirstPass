@@ -1,6 +1,6 @@
 # gui/dialogs/file_preview.py
 """
-Enhanced file preview dialog for CSV files with filtering options.
+Enhanced file preview dialog for CSV files with instrument type detection and filtering options.
 """
 
 import tkinter as tk
@@ -38,11 +38,11 @@ class FilePreviewDialog:
         # UI widgets
         self.preview_text = None
         self.status_label = None
-        self.instrument_type_label = None
+        self.instrument_type_label = None  # For displaying detected instrument type
         
     def show(self) -> None:
         """Show the preview dialog."""
-        # Get initial preview data 
+        # Get initial preview data
         temp_processor = ParticleDataProcessor()
         self.preview_data = temp_processor.preview_csv(self.file_path, preview_rows=15)
         
@@ -96,7 +96,7 @@ class FilePreviewDialog:
             text=f"Detected columns: {self.preview_data['detected_columns']}"
         )
         
-        # NEW: Instrument type display
+        # Instrument type display (gets from data processor via preview_data)
         instrument_type = self.preview_data.get('instrument_type', 'Unknown')
         instrument_color = 'green' if instrument_type != 'Unknown' else 'orange'
         self.instrument_type_label = ttk.Label(
@@ -176,7 +176,7 @@ class FilePreviewDialog:
         self.file_label.pack(anchor='w')
         self.lines_label.pack(anchor='w')
         self.columns_label.pack(anchor='w')
-        self.instrument_type_label.pack(anchor='w')  # NEW: Display instrument type
+        self.instrument_type_label.pack(anchor='w')
         
         # Preview controls
         self.preview_control_frame.pack(fill='x', padx=10, pady=5)
@@ -253,7 +253,7 @@ class FilePreviewDialog:
                 num_lines = 1000
                 self.preview_lines_var.set(1000)
             
-            # Get new preview data (includes re-detection of instrument type)
+            # Get new preview data
             temp_processor = ParticleDataProcessor()
             new_preview_data = temp_processor.preview_csv(self.file_path, preview_rows=num_lines)
             

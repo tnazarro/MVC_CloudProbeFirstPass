@@ -80,9 +80,6 @@ class ParticleDataProcessor:
     def set_instrument_type(self, instrument_type: str) -> None:
         """
         Manually set the instrument type (for future editability).
-        
-        Args:
-            instrument_type: The instrument type string to set
         """
         self.instrument_type = instrument_type.strip()
         logger.info(f"Instrument type manually set to: {self.instrument_type}")
