@@ -40,3 +40,25 @@ SUPPORTED_CSV_ENCODINGS = [
     'cp1252',          # Windows code page 1252
     'latin1'           # Alias for iso-8859-1, backup option
 ]
+
+# Font configurations - centralized for easy modification
+UI_FONTS = {
+    'default': ('TkDefaultFont', 9, 'normal'),
+    'bold': ('TkDefaultFont', 9, 'bold'),
+    'small': ('TkDefaultFont', 8, 'normal'),
+    'small_bold': ('TkDefaultFont', 8, 'bold'),
+    'heading': ('TkDefaultFont', 10, 'bold'),
+    'large_heading': ('TkDefaultFont', 11, 'bold'),
+    'extra_large_heading': ('TkDefaultFont', 12, 'bold'),
+    'courier': ('Courier', 9, 'normal'),
+    'courier_small': ('Courier', 8, 'normal'),
+}
+
+# Backward compatibility - specific font references used in the codebase
+FONT_INSTRUMENT_TYPE = UI_FONTS['bold']  # For instrument type labels
+FONT_FILE_NAME = UI_FONTS['bold']        # For file name labels  
+FONT_PROGRESS = UI_FONTS['heading']      # For progress text
+FONT_PREVIEW_TEXT = UI_FONTS['courier']  # For preview text display
+FONT_HINT_TEXT = UI_FONTS['small']       # For hint text
+FONT_STATUS = UI_FONTS['small']          # For status labels
+FONT_STATUS_LARGE = UI_FONTS['large_heading']  # For large status labels

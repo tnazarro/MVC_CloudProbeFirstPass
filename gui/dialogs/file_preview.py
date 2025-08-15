@@ -8,6 +8,7 @@ from tkinter import ttk, messagebox
 import logging
 from typing import Dict, Any, Callable, Optional
 from core.data_processor import ParticleDataProcessor
+from config.constants import FONT_FILE_NAME, FONT_INSTRUMENT_TYPE, FONT_HINT_TEXT, FONT_STATUS, FONT_PREVIEW_TEXT
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +86,7 @@ class FilePreviewDialog:
         self.file_label = ttk.Label(
             self.info_frame, 
             text=f"File: {filename}", 
-            font=('TkDefaultFont', 9, 'bold')
+            font=FONT_FILE_NAME
         )
         self.lines_label = ttk.Label(
             self.info_frame, 
@@ -102,7 +103,7 @@ class FilePreviewDialog:
         self.instrument_type_label = ttk.Label(
             self.info_frame,
             text=f"Instrument Type: {instrument_type}",
-            font=('TkDefaultFont', 9, 'bold'),
+            font=FONT_INSTRUMENT_TYPE,
             foreground=instrument_color
         )
         
@@ -115,19 +116,19 @@ class FilePreviewDialog:
         self.preview_lines_var = tk.IntVar(value=15)
         self.preview_lines_entry = ttk.Entry(self.controls_row, textvariable=self.preview_lines_var, width=8)
         self.refresh_button = ttk.Button(self.controls_row, text="🔄 Refresh Preview", command=self._refresh_preview)
-        self.preview_hint_label = ttk.Label(self.controls_row, text="(1-1000 lines)", font=('TkDefaultFont', 8))
+        self.preview_hint_label = ttk.Label(self.controls_row, text="(1-1000 lines)", font=FONT_HINT_TEXT)
         self.status_label = ttk.Label(
             self.controls_row, 
             text=f"✓ Showing first {len(self.preview_data['preview_lines'])} lines", 
             foreground='green', 
-            font=('TkDefaultFont', 8)
+            font=FONT_STATUS
         )
         
         # Preview text section
         self.preview_section = ttk.LabelFrame(self.dialog, text="File Preview", padding=5)
         self.text_frame = ttk.Frame(self.preview_section)
         
-        self.preview_text = tk.Text(self.text_frame, wrap='none', font=('Courier', 9))
+        self.preview_text = tk.Text(self.text_frame, wrap='none', font=FONT_PREVIEW_TEXT)
         self.scrollbar_y = ttk.Scrollbar(self.text_frame, orient='vertical', command=self.preview_text.yview)
         self.scrollbar_x = ttk.Scrollbar(self.text_frame, orient='horizontal', command=self.preview_text.xview)
         self.preview_text.configure(yscrollcommand=self.scrollbar_y.set, xscrollcommand=self.scrollbar_x.set)
@@ -161,7 +162,7 @@ class FilePreviewDialog:
         self.skip_hint_label = ttk.Label(
             self.filter_row, 
             text="(Use this to skip headers, metadata, or junk data)", 
-            font=('TkDefaultFont', 8)
+            font=FONT_STATUS
         )
         
         # Buttons section
@@ -362,8 +363,7 @@ class FilePreviewDialog:
             
         except tk.TclError:
             messagebox.showerror("Error", "Please enter a valid number for rows to skip.")
-
-            
+         
     def _on_cancel(self) -> None:
         """Handle the cancel button click or dialog close."""
         self.dialog.destroy()
