@@ -15,7 +15,8 @@ import numpy as np
 from core.data_processor import ParticleDataProcessor
 from core.dataset_manager import DatasetManager
 from core.plotter import ParticlePlotter
-from config.constants import SUPPORTED_FILE_TYPES, MIN_BIN_COUNT, MAX_BIN_COUNT, DEFAULT_BIN_COUNT
+from config.constants import (SUPPORTED_FILE_TYPES, MIN_BIN_COUNT, MAX_BIN_COUNT, DEFAULT_BIN_COUNT,
+                             FONT_PROGRESS, FONT_INSTRUMENT_TYPE, FONT_HINT_TEXT, FONT_STATUS, FONT_FILE_NAME, FONT_PREVIEW_TEXT, FONT_STATUS_LARGE)
 from core.file_queue import FileQueue
 from gui.dialogs.file_preview import FilePreviewDialog
 from gui.dialogs.load_choice import LoadChoiceDialog
@@ -213,7 +214,7 @@ class MainWindow:
         self.mode_description = ttk.Label(
             self.analysis_mode_frame, 
             text="Calibration: Single dataset analysis for instrument calibration",
-            font=('TkDefaultFont', 8),
+            font=FONT_HINT_TEXT,
             foreground='blue'
         )
         self.mode_description.pack(anchor='w', pady=(5,0))
@@ -233,7 +234,7 @@ class MainWindow:
         self.queue_status_frame = ttk.Frame(self.control_frame)
         self.queue_status_frame.grid(row=2, column=0, columnspan=3, sticky='ew', pady=2)
         
-        self.queue_status_label = ttk.Label(self.queue_status_frame, text="", font=('TkDefaultFont', 8))
+        self.queue_status_label = ttk.Label(self.queue_status_frame, text="", font=FONT_STATUS)
         self.queue_status_label.pack(anchor='w')
         
         # === LOADED DATASETS FRAME (MOVED HERE - previously in middle column) ===
@@ -326,7 +327,7 @@ class MainWindow:
         self.compact_info_label = ttk.Label(
             compact_info_frame, 
             text="No datasets loaded", 
-            font=('TkDefaultFont', 8),
+            font=FONT_STATUS,
             wraplength=250,  # Adjusted for left column width
             justify='left'
         )
@@ -402,7 +403,7 @@ class MainWindow:
 
         # Optional: Add a label showing the valid range
         bin_hint_label = ttk.Label(bin_frame, text=f"({MIN_BIN_COUNT}-{MAX_BIN_COUNT})", 
-                                font=('TkDefaultFont', 8), foreground='gray')
+                                font=FONT_HINT_TEXT, foreground='gray')
         bin_hint_label.grid(row=0, column=1, sticky='w', padx=(5,0))
 
         # Configure bin frame column weights (optional, for consistent spacing)
@@ -993,13 +994,13 @@ class MainWindow:
             if queue_info['skipped_count'] > 0:
                 progress_text += f" | Skipped: {queue_info['skipped_count']}"
             
-            ttk.Label(progress_frame, text=progress_text, font=('TkDefaultFont', 10, 'bold')).pack(anchor='w')
+            ttk.Label(progress_frame, text=progress_text, font=FONT_PROGRESS).pack(anchor='w')
             
             # File info header (NO TAG EDITING HERE - moved to filtering section)
             info_frame = ttk.LabelFrame(preview_window, text="Current File Information", padding=5)
             info_frame.pack(fill='x', padx=10, pady=5)
             
-            ttk.Label(info_frame, text=f"File: {file_info['filename']}", font=('TkDefaultFont', 9, 'bold')).pack(anchor='w')
+            ttk.Label(info_frame, text=f"File: {file_info['filename']}", font=FONT_FILE_NAME).pack(anchor='w')
             ttk.Label(info_frame, text=f"Total lines: {preview_data['total_lines']}").pack(anchor='w')
             ttk.Label(info_frame, text=f"Detected columns: {preview_data['detected_columns']}").pack(anchor='w')
 
@@ -1008,7 +1009,7 @@ class MainWindow:
             instrument_label = ttk.Label(
                 info_frame,
                 text=f"Instrument Type: {instrument_type}",
-                font=('TkDefaultFont', 9, 'bold'),
+                font=FONT_INSTRUMENT_TYPE,
                 foreground=instrument_color
             )
             instrument_label.pack(anchor='w')
@@ -1017,7 +1018,7 @@ class MainWindow:
             preview_section = ttk.LabelFrame(preview_window, text="File Preview", padding=5)
             preview_section.pack(fill='both', expand=True, padx=10, pady=5)
             
-            preview_text = tk.Text(preview_section, wrap='none', font=('Courier', 9), height=15)
+            preview_text = tk.Text(preview_section, wrap='none', font=FONT_PREVIEW_TEXT, height=15)
             scrollbar = ttk.Scrollbar(preview_section, orient='vertical', command=preview_text.yview)
             preview_text.configure(yscrollcommand=scrollbar.set)
             
@@ -1063,7 +1064,7 @@ class MainWindow:
             skip_hint_label = ttk.Label(
                 filter_row, 
                 text="(Use this to skip headers, metadata, or junk data)", 
-                font=('TkDefaultFont', 8)
+                font=FONT_HINT_TEXT
             )
             skip_hint_label.grid(row=1, column=2, sticky='w', padx=(10,0), pady=(10,0))
             
@@ -1475,9 +1476,9 @@ class MainWindow:
         
         for i, (param_name, param_value) in enumerate(params_data):
             ttk.Label(params_frame, text=f"{param_name}:", 
-                    font=('TkDefaultFont', 9, 'bold')).grid(row=i, column=0, sticky='w', pady=2)
+                    font=FONT_INSTRUMENT_TYPE).grid(row=i, column=0, sticky='w', pady=2)
             ttk.Label(params_frame, text=param_value, 
-                    font=('Courier', 9)).grid(row=i, column=1, sticky='w', padx=(20, 0), pady=2)
+                    font=FONT_PREVIEW_TEXT).grid(row=i, column=1, sticky='w', padx=(20, 0), pady=2)
         
         # === Quality Tab ===
         quality_frame = ttk.Frame(notebook, padding=10)
@@ -1511,7 +1512,7 @@ class MainWindow:
         
         # Display status with color
         status_label = tk.Label(quality_frame, text=quality_status,
-                            font=('TkDefaultFont', 11, 'bold'),
+                            font=FONT_STATUS_LARGE,
                             fg=status_color)
         status_label.pack(anchor='w', pady=(0, 5))
         
@@ -1534,9 +1535,9 @@ class MainWindow:
         
         for i, (metric_name, metric_value) in enumerate(quality_data):
             ttk.Label(quality_frame, text=f"{metric_name}:", 
-                    font=('TkDefaultFont', 9, 'bold')).grid(row=i+1, column=0, sticky='w', pady=2)
+                    font=FONT_FILE_NAME).grid(row=i+1, column=0, sticky='w', pady=2)
             ttk.Label(quality_frame, text=metric_value, 
-                    font=('Courier', 9)).grid(row=i+1, column=1, sticky='w', padx=(20, 0), pady=2)
+                    font=FONT_PREVIEW_TEXT).grid(row=i+1, column=1, sticky='w', padx=(20, 0), pady=2)
         
         # === Data Tab ===
         data_frame = ttk.Frame(notebook, padding=10)
@@ -1554,9 +1555,9 @@ class MainWindow:
         
         for i, (info_name, info_value) in enumerate(data_info):
             ttk.Label(data_frame, text=f"{info_name}:", 
-                    font=('TkDefaultFont', 9, 'bold')).grid(row=i, column=0, sticky='w', pady=2)
+                    font=FONT_FILE_NAME).grid(row=i, column=0, sticky='w', pady=2)
             ttk.Label(data_frame, text=info_value, 
-                    font=('Courier', 9)).grid(row=i, column=1, sticky='w', padx=(20, 0), pady=2)
+                    font=FONT_PREVIEW_TEXT).grid(row=i, column=1, sticky='w', padx=(20, 0), pady=2)
         
         # === Equation Tab ===
         equation_frame = ttk.Frame(notebook, padding=10)
@@ -1579,7 +1580,7 @@ class MainWindow:
     95% of data lies within μ ± 2σ = [{params['mean'] - 2*params['stddev']:.3f}, {params['mean'] + 2*params['stddev']:.3f}]"""
         
         equation_label = tk.Text(equation_frame, wrap='word', height=15, width=60, 
-                                font=('Courier', 9))
+                                font=FONT_PREVIEW_TEXT)
         equation_label.insert(1.0, equation_text)
         equation_label.config(state='disabled')
         equation_label.pack(fill='both', expand=True)

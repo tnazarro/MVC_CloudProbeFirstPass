@@ -5,7 +5,7 @@ Data processing module for particle sizing data.
 import pandas as pd
 import numpy as np
 import logging
-from typing import Tuple, List, Optional
+from typing import Tuple, List, Optional, Dict, Any
 from config.constants import SIZE_COLUMN_NAMES, FREQUENCY_COLUMN_NAMES, RANDOM_DATA_BOUNDS, SUPPORTED_CSV_ENCODINGS
 
 logger = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ class ParticleDataProcessor:
         self.size_column = None
         self.frequency_column = None
         self.data_mode = "raw_measurements"  # "pre_aggregated" or "raw_measurements"
-        self.instrument_type = "Unknown"  # NEW: Store detected instrument type
+        self.instrument_type = "Unknown"
     
     def detect_instrument_type(self, file_path: str, max_lines: int = 15) -> str:
         """
@@ -83,7 +83,62 @@ class ParticleDataProcessor:
         """
         self.instrument_type = instrument_type.strip()
         logger.info(f"Instrument type manually set to: {self.instrument_type}")
-    
+
+    def _parse_csv_metadata(self, file_path: str) -> Dict[str, Any]:
+        """
+        Parse CSV file metadata including encoding detection and basic file info.
+        
+        Args:
+            file_path: Path to the CSV file
+            
+        Returns:
+            Dict containing:
+                - success: bool
+                - encoding: str (if successful)
+                - error: str (if failed)
+                - total_lines: int (if successful)
+                - sample_columns: list (if successful)
+        """
+        # First, detect instrument type
+        detected_instrument = self.detect_instrument_type(file_path)
+        
+        for encoding in SUPPORTED_CSV_ENCODINGS:
+            try:
+                # Get total line count
+                with open(file_path, 'r', encoding=encoding) as f:
+                    total_lines = sum(1 for _ in f)
+                
+                # Try to parse a small sample to get column info
+                try:
+                    sample_df = pd.read_csv(file_path, nrows=5, encoding=encoding)
+                    sample_columns = sample_df.columns.tolist()
+                except Exception:
+                    sample_columns = []
+                
+                return {
+                    'success': True,
+                    'encoding': encoding,
+                    'total_lines': total_lines,
+                    'sample_columns': sample_columns,
+                    'instrument_type': detected_instrument
+                }
+                
+            except UnicodeDecodeError:
+                # Try next encoding
+                continue
+            except Exception as e:
+                logger.warning(f"Error parsing CSV metadata with encoding {encoding}: {e}")
+                continue
+        
+        # If all encodings failed
+        error_msg = f"Could not read file with any supported encoding. Tried: {', '.join(SUPPORTED_CSV_ENCODINGS)}"
+        logger.error(error_msg)
+        return {
+            'success': False,
+            'error': error_msg,
+            'instrument_type': "Unknown"
+        }
+
     def load_csv(self, file_path: str, skip_rows: int = 0) -> bool:
         """
         Load CSV file and attempt to identify size and frequency columns.
@@ -96,34 +151,33 @@ class ParticleDataProcessor:
         Returns:
             bool: True if successfully loaded, False otherwise
         """
-        # First, detect instrument type before loading the data
-        self.detect_instrument_type(file_path)
+        # Parse metadata (includes instrument type detection)
+        metadata = self._parse_csv_metadata(file_path)
         
-        for encoding in SUPPORTED_CSV_ENCODINGS:
-            try:
-                # Load CSV with row skipping and encoding
-                if skip_rows > 0:
-                    self.data = pd.read_csv(file_path, skiprows=skip_rows, encoding=encoding)
-                    logger.info(f"Loaded CSV with {skip_rows} rows skipped - {len(self.data)} rows and {len(self.data.columns)} columns remaining (encoding: {encoding})")
-                else:
-                    self.data = pd.read_csv(file_path, encoding=encoding)
-                    logger.info(f"Loaded CSV with {len(self.data)} rows and {len(self.data.columns)} columns (encoding: {encoding})")
-                
-                # Auto-detect columns
-                self._detect_columns()
-                
-                return True
-                
-            except UnicodeDecodeError:
-                # Try next encoding
-                continue
-            except Exception as e:
-                logger.error(f"Failed to load CSV with encoding {encoding}: {e}")
-                continue
+        if not metadata['success']:
+            logger.error(f"Failed to parse CSV metadata: {metadata['error']}")
+            return False
         
-        # If all encodings failed
-        logger.error(f"Failed to load CSV with any supported encoding. Tried: {', '.join(SUPPORTED_CSV_ENCODINGS)}")
-        return False
+        # Use the detected encoding to load the full dataset
+        encoding = metadata['encoding']
+        
+        try:
+            # Load CSV with row skipping
+            if skip_rows > 0:
+                self.data = pd.read_csv(file_path, skiprows=skip_rows, encoding=encoding)
+                logger.info(f"Loaded CSV with {skip_rows} rows skipped - {len(self.data)} rows and {len(self.data.columns)} columns remaining (encoding: {encoding})")
+            else:
+                self.data = pd.read_csv(file_path, encoding=encoding)
+                logger.info(f"Loaded CSV with {len(self.data)} rows and {len(self.data.columns)} columns (encoding: {encoding})")
+            
+            # Auto-detect columns
+            self._detect_columns()
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to load CSV with detected encoding {encoding}: {e}")
+            return False
     
     def _detect_columns(self):
         """Attempt to automatically detect size and frequency columns."""
@@ -254,7 +308,7 @@ class ParticleDataProcessor:
     def preview_csv(self, file_path: str, preview_rows: int = 10) -> dict:
         """
         Preview the first few rows of a CSV file to help identify junk data.
-        Now also detects and includes instrument type information.
+        Also detects and includes instrument type information.
         
         Args:
             file_path: Path to the CSV file
@@ -263,51 +317,41 @@ class ParticleDataProcessor:
         Returns:
             dict: Contains preview data, total rows, columns info, and instrument type
         """
-        for encoding in SUPPORTED_CSV_ENCODINGS:
-            try:
-                # First detect instrument type
-                detected_instrument = self.detect_instrument_type(file_path)
-                
-                # Read just the preview rows
-                with open(file_path, 'r', encoding=encoding) as f:
-                    preview_lines = [f.readline().strip() for _ in range(preview_rows)]
-                
-                # Get total line count with same encoding
-                with open(file_path, 'r', encoding=encoding) as f:
-                    total_lines = sum(1 for _ in f)
-                
-                # Try to parse the file normally to get column info
-                try:
-                    sample_df = pd.read_csv(file_path, nrows=5, encoding=encoding)
-                    columns = sample_df.columns.tolist()
-                    detected_columns = len(columns)
-                except:
-                    columns = []
-                    detected_columns = 0
-                
-                return {
-                    'success': True,
-                    'preview_lines': preview_lines,
-                    'total_lines': total_lines,
-                    'detected_columns': detected_columns,
-                    'column_names': columns,
-                    'encoding_used': encoding,
-                    'instrument_type': detected_instrument
-                }
-                
-            except UnicodeDecodeError:
-                # Try next encoding
-                continue
-            except Exception as e:
-                logger.error(f"Failed to preview CSV with encoding {encoding}: {e}")
-                continue
+        # Use the common metadata parsing function
+        metadata = self._parse_csv_metadata(file_path)
         
-        # If all encodings failed
-        return {
-            'success': False,
-            'error': f"Could not read file with any supported encoding. Tried: {', '.join(SUPPORTED_CSV_ENCODINGS)}",
-            'instrument_type': "Unknown"
-        }
+        if not metadata['success']:
+            return {
+                'success': False,
+                'error': metadata['error'],
+                'instrument_type': metadata.get('instrument_type', 'Unknown')
+            }
+        
+        # Use the detected encoding to read preview lines
+        encoding = metadata['encoding']
+        
+        try:
+            # Read just the preview rows
+            with open(file_path, 'r', encoding=encoding) as f:
+                preview_lines = [f.readline().strip() for _ in range(preview_rows)]
+            
+            return {
+                'success': True,
+                'preview_lines': preview_lines,
+                'total_lines': metadata['total_lines'],
+                'detected_columns': len(metadata['sample_columns']),
+                'column_names': metadata['sample_columns'],
+                'encoding_used': encoding,
+                'instrument_type': metadata['instrument_type']
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to read preview lines with encoding {encoding}: {e}")
+            return {
+                'success': False,
+                'error': f"Failed to read preview lines: {str(e)}",
+                'instrument_type': metadata.get('instrument_type', 'Unknown')
+            }
     
     def generate_random_data(self, n: int = None, distribution: str = 'lognormal') -> bool:
         """
