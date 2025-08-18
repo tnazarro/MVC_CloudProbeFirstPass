@@ -597,7 +597,6 @@ class MainWindow:
             
             # Show error message
             messagebox.showerror("Invalid Bead Size", "Bead size must be a valid number (e.g., 1.5, -2.0, 42)")
-
     
     def _update_tag_editor(self):
         """Update the tag editor with the active dataset's tag."""
@@ -871,7 +870,6 @@ class MainWindow:
     #     except tk.TclError:
     #         messagebox.showerror("Error", "Please enter a valid number of points.")
 
-    
     # # def _add_generated_dataset(self, data_processor, tag, notes):
     #     """Add a generated dataset to the dataset manager."""
     #     import uuid
@@ -1332,7 +1330,6 @@ class MainWindow:
                 logger.error(f"Error handling dataset selection: {e}")
                 # Optionally show user-friendly error message
 
-    
     def previous_dataset(self):
         """Navigate to previous dataset."""
         prev_id = self.dataset_manager.get_previous_dataset_id()
