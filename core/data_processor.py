@@ -70,7 +70,6 @@ class ParticleDataProcessor:
         self.instrument_type = "Unknown"
         return "Unknown"
 
-    
     def get_instrument_type(self) -> str:
         """
         Get the detected or set instrument type.

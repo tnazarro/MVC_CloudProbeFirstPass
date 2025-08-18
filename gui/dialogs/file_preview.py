@@ -363,8 +363,7 @@ class FilePreviewDialog:
             
         except tk.TclError:
             messagebox.showerror("Error", "Please enter a valid number for rows to skip.")
-
-            
+         
     def _on_cancel(self) -> None:
         """Handle the cancel button click or dialog close."""
         self.dialog.destroy()
