@@ -12,6 +12,8 @@ from config.constants import FONT_FILE_NAME, FONT_INSTRUMENT_TYPE, FONT_HINT_TEX
 
 logger = logging.getLogger(__name__)
 
+#TODO: Debug, change layout and include preview options
+
 class FilePreviewDialog:
     """Enhanced dialog for previewing CSV files with configurable filtering options and instrument type detection."""
     
