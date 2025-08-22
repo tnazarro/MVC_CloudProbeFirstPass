@@ -176,6 +176,8 @@ class MainWindow:
         self._update_dataset_ui()
         self._update_analysis_mode_ui()
     
+    #TODO: Adjust layout of buttons, clean up redundant elements, rearrange layout for better usability
+
     def _create_widgets(self):
         """Create all GUI widgets."""
         # Main frame (no longer needed - keeping for compatibility but not used)
