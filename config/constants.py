@@ -62,3 +62,20 @@ FONT_PREVIEW_TEXT = UI_FONTS['courier']  # For preview text display
 FONT_HINT_TEXT = UI_FONTS['small']       # For hint text
 FONT_STATUS = UI_FONTS['small']          # For status labels
 FONT_STATUS_LARGE = UI_FONTS['large_heading']  # For large status labels
+
+INSTRUMENT_PREVIEW_DEFAULTS = { #TODO: Choose defaults wisely for each instrument; these are subject to change
+    'CDP': 60,           # CDP
+    'CDP PBP': 60,       # CDP PBP variant
+    'FM-100': 20,        # FM-100 instruments
+    'FM-120': 20,        # FM-120 instruments
+    'CAS': 18,          # CAS instruments
+    'CAS-DPOL': 18,     # CAS-DPOL variant
+    'CAS DPOL': 18,     # Alternative naming
+    'BCPD': 15,         # BCPD instruments
+    'BCP': 15,          # BCP instruments
+    'GFAS': 22,         # GFAS instruments
+    'Unknown': 15,      # Default for unknown instruments
+    'Generated Data': 10  # For generated/test data   
+}
+
+DEFAULT_PREVIEW_LINES = 15 
