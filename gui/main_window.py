@@ -21,6 +21,7 @@ from core.file_queue import FileQueue
 from gui.dialogs.file_preview import FilePreviewDialog
 from gui.dialogs.load_choice import LoadChoiceDialog
 
+#TODO: Moving dataset management frame above graphing options
 
 # Try to import report generation (now required dependency)
 try:
