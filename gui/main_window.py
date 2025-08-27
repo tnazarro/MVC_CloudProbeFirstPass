@@ -11,6 +11,7 @@ import logging
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 import matplotlib.pyplot as plt
 import numpy as np
+from datetime import datetime
 
 from core.data_processor import ParticleDataProcessor
 from core.dataset_manager import DatasetManager
@@ -333,28 +334,6 @@ class MainWindow:
         )
         self.compact_info_label.pack(anchor='w', fill='x')
         
-        # # === RANDOM DATA GENERATION ===
-        # ttk.Separator(self.control_frame, orient='horizontal').grid(row=4, column=0, columnspan=3, sticky='ew', pady=5)
-
-        # ttk.Label(self.control_frame, text="Generate Random Data:").grid(row=5, column=0, sticky='w', pady=2)
-
-        # # Random data controls frame
-        # random_frame = ttk.Frame(self.control_frame)
-        # random_frame.grid(row=6, column=0, columnspan=3, sticky='ew', pady=2)
-        
-        # ttk.Label(random_frame, text="Points:").grid(row=0, column=0, sticky='w')
-        # self.random_count_entry = ttk.Entry(random_frame, textvariable=self.random_count_var, width=8)
-        # self.random_count_entry.grid(row=0, column=1, padx=5)
-        
-        # ttk.Label(random_frame, text="Distribution:").grid(row=0, column=2, sticky='w', padx=(10,0))
-        # self.distribution_combo = ttk.Combobox(random_frame, textvariable=self.distribution_var, 
-        #                                      values=['lognormal', 'normal', 'uniform'], 
-        #                                      state='readonly', width=10)
-        # self.distribution_combo.grid(row=0, column=3, padx=5)
-        
-        # self.generate_button = ttk.Button(random_frame, text="Generate", command=self.generate_random_data)
-        # self.generate_button.grid(row=0, column=4, padx=5)
-        
         # === DATA ANALYSIS CONTROLS ===
         ttk.Separator(self.control_frame, orient='horizontal').grid(row=4, column=0, columnspan=3, sticky='ew', pady=5)
         
@@ -488,17 +467,60 @@ class MainWindow:
         plot_nav_frame = ttk.Frame(self.plot_frame)
         plot_nav_frame.pack(fill='x', pady=(0, 10))
         
-        # Dataset navigation buttons (moved here from dataset management frame)
+        # Dataset navigation buttons with save graph button in the middle
         self.prev_dataset_btn = ttk.Button(plot_nav_frame, text="◀ Previous Dataset", 
                                           command=self.previous_dataset, state='disabled')
-        self.prev_dataset_btn.pack(side='left', padx=(0,10))
+        self.prev_dataset_btn.pack(side='left')
+        
+        self.save_graph_btn = ttk.Button(plot_nav_frame, text="💾 Save Graph", 
+                                        command=self.save_graph, state='disabled')
+        self.save_graph_btn.pack(side='left', padx=25) #Space based on left button; may be a better way to do this
         
         self.next_dataset_btn = ttk.Button(plot_nav_frame, text="Next Dataset ▶", 
                                           command=self.next_dataset, state='disabled')
-        self.next_dataset_btn.pack(side='left')
+        self.next_dataset_btn.pack(side='right')
         
         # Configure column weights
         self.control_frame.columnconfigure(1, weight=1)
+    
+    def save_graph(self):
+        """Save the current graph as a PNG image."""
+        if not hasattr(self, 'canvas') or not self.current_figure:
+            messagebox.showerror("Error", "No graph to save. Please create a plot first.")
+            return
+        
+        active_dataset = self.dataset_manager.get_active_dataset()
+        if not active_dataset:
+            messagebox.showerror("Error", "No active dataset.")
+            return
+        
+        # Generate default filename with dataset tag and timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        dataset_tag = active_dataset['tag'].replace('.', '_').replace(' ', '_')
+        default_filename = f"{dataset_tag}_bead_size_{timestamp}.png"
+        
+        # Show save file dialog
+        file_path = filedialog.asksaveasfilename(
+            title="Save Graph As",
+            defaultextension=".png",
+            initialfile=default_filename,
+            filetypes=[("PNG files", "*.png"), ("All files", "*.*")]
+        )
+        
+        if not file_path:
+            return  # User cancelled
+        
+        try:
+            # Save the plot using the plotter's save method
+            success = self.plotter.save_plot(file_path, dpi=300)
+            
+            if success:
+                messagebox.showinfo("Success", f"Graph saved successfully!\nSaved to: {file_path}")
+            else:
+                messagebox.showerror("Error", "Failed to save graph.")
+                
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to save graph: {str(e)}")
     
     def _create_layout(self):
         # Pack the left scrollable frame, and right plot scrollable frame
@@ -691,6 +713,7 @@ class MainWindow:
         mode = self.analysis_mode_var.get()
         has_datasets = self.dataset_manager.has_datasets()
         has_multiple = self.dataset_manager.get_dataset_count() > 1
+        has_plot = hasattr(self, 'canvas') and self.current_figure
         
         if mode == 'calibration':
             # In calibration mode, navigation is less relevant but still functional
@@ -700,6 +723,9 @@ class MainWindow:
             # In verification mode, navigation is fully functional
             self.prev_dataset_btn.config(state='normal' if has_multiple else 'disabled')
             self.next_dataset_btn.config(state='normal' if has_multiple else 'disabled')
+        
+        # Save graph button is enabled when there's a plot to save
+        self.save_graph_btn.config(state='normal' if has_plot else 'disabled')
     
     def _keep_only_active_dataset(self):
         """Remove all datasets except the active one (for calibration mode)."""
@@ -826,96 +852,6 @@ class MainWindow:
                 self._start_queue_processing()
             else:
                 messagebox.showerror("Error", "No valid files were added to the queue.")
-    
-    # def generate_random_data(self):
-    #     """Generate random particle data for testing."""
-    #     try:
-    #         n = self.random_count_var.get()
-    #         distribution = self.distribution_var.get()
-            
-    #         if n <= 0:
-    #             messagebox.showerror("Error", "Number of points must be positive.")
-    #             return
-            
-    #         # Create temporary processor for random data generation
-    #         temp_processor = ParticleDataProcessor()
-    #         if temp_processor.generate_random_data(n, distribution):
-    #             # Generate numeric tag based on parameters
-    #             numeric_tag = str(float(n))  # Use point count as tag
-    #             notes = f"Generated {distribution} distribution with {n} data points"
-                
-    #             dataset_id = self._add_generated_dataset(temp_processor, numeric_tag, notes)
-                
-    #             if dataset_id:
-    #                 # Set as active dataset
-    #                 self.dataset_manager.set_active_dataset(dataset_id)
-                    
-    #                 # Update UI
-    #                 self._update_dataset_ui()
-    #                 self._load_active_dataset_settings()
-    #                 self._update_column_combos()
-    #                 self._update_stats_display()
-    #                 self.plot_button.config(state='normal')
-    #                 self._update_report_button_state()
-                    
-    #                 # Update scroll region after adding dataset
-    #                 self.scrollable_frame.update_scroll_region()
-                    
-    #                 messagebox.showinfo("Success", f"Generated dataset '{numeric_tag}' successfully!")
-    #             else:
-    #                 messagebox.showerror("Error", "Failed to add generated data to dataset manager.")
-    #         else:
-    #             messagebox.showerror("Error", "Failed to generate random data.")
-                
-    #     except tk.TclError:
-    #         messagebox.showerror("Error", "Please enter a valid number of points.")
-
-    # # def _add_generated_dataset(self, data_processor, tag, notes):
-    #     """Add a generated dataset to the dataset manager."""
-    #     import uuid
-    #     from datetime import datetime
-        
-    #     try:
-    #         # Create unique ID for this dataset
-    #         dataset_id = str(uuid.uuid4())
-            
-    #         # Assign color
-    #         color = self.dataset_manager._get_next_color()
-            
-    #         # Create dataset entry for generated data
-    #         dataset_info = {
-    #             'id': dataset_id,
-    #             'filename': 'Generated Data',
-    #             'file_path': None,  # No file path for generated data
-    #             'tag': tag,
-    #             'notes': notes,
-    #             'color': color,
-    #             'data_processor': data_processor,
-    #             'loaded_at': datetime.now(),
-    #             'skip_rows': 0,
-    #             # Store current analysis settings per dataset
-    #             'analysis_settings': {
-    #                 'data_mode': 'pre_aggregated',  # Generated data is always pre-aggregated
-    #                 'bin_count': 50,
-    #                 'size_column': data_processor.size_column,
-    #                 'frequency_column': data_processor.frequency_column,
-    #                 'show_stats_lines': True
-    #             }
-    #         }
-            
-    #         # Add to collection
-    #         self.dataset_manager.datasets[dataset_id] = dataset_info
-            
-    #         # Set as active if it's the first dataset
-    #         if self.dataset_manager.active_dataset_id is None:
-    #             self.dataset_manager.active_dataset_id = dataset_id
-            
-    #         logger.info(f"Added generated dataset: {tag} (ID: {dataset_id})")
-    #         return dataset_id
-            
-    #     except Exception as e:
-    #         logger.error(f"Error adding generated dataset: {e}")
-    #         return None
     
     # === FILE QUEUE PROCESSING METHODS ===
     
@@ -1737,6 +1673,7 @@ For more detailed help, please refer to the user manual or contact support."""
         # Disable plot button
         self.plot_button.config(state='disabled')
         self._update_report_button_state()
+        self._update_navigation_buttons_for_mode()  # Update navigation buttons including save graph
         
         # Clear plot if exists
         if hasattr(self, 'canvas'):
@@ -2043,6 +1980,7 @@ For more detailed help, please refer to the user manual or contact support."""
             self.current_figure = figure  # Store reference to current figure
             self._display_plot(figure)
             self._update_report_button_state()  # Enable report button when plot is created
+            self._update_navigation_buttons_for_mode()  # Update navigation buttons including save graph
             
             # Save settings
             self._save_active_dataset_settings()
@@ -2071,12 +2009,13 @@ For more detailed help, please refer to the user manual or contact support."""
                 title=plot_title,
                 show_stats_lines=self.show_stats_lines_var.get(),
                 data_mode=mode,
-                show_gaussian_fit=self.show_gaussian_fit_var.get()  # ADD THIS LINE
+                show_gaussian_fit=self.show_gaussian_fit_var.get()
             )
             
             if figure is not None:
                 self._display_plot(figure)
-                self._update_report_button_state()  # Update report button after plot update
+                self._update_report_button_state()
+                self._update_navigation_buttons_for_mode()  # Update navigation buttons including save graph
     
     def _display_plot(self, figure):
         """Display the plot in the GUI."""
@@ -2305,9 +2244,6 @@ For more detailed help, please refer to the user manual or contact support."""
 
     def _reorder_datasets(self, drag_item, target_item, drop_y):
         """Reorder datasets in both treeview and dataset manager."""
-        # DEBUG: Uncomment this line to see order comparison
-        # self.debug_orders_comparison()
-        
         try:
             # Get the dataset IDs from the treeview items BY LOOKING UP THE ACTUAL DATA
             all_items = list(self.dataset_treeview.get_children())
@@ -2454,10 +2390,6 @@ For more detailed help, please refer to the user manual or contact support."""
         
         # Replace the manager's datasets
         self.dataset_manager.datasets = new_datasets
-        
-        # print(f"DEBUG: Reorder complete - new order:")
-        # for i, (id, dataset) in enumerate(datasets):
-        #     print(f"  {i}: {dataset['tag']}")
         
         logger.info(f"Moved dataset {dataset_id} from position {old_position} to {new_position}")
 
