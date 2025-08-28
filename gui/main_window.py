@@ -182,62 +182,46 @@ class MainWindow:
         # Control frame (left side) - now goes inside scrollable frame
         self.control_frame = ttk.LabelFrame(self.scrollable_frame.scrollable_frame, text="Controls", padding=10)
         
-        # === ANALYSIS MODE SELECTION ===
-        self.analysis_mode_frame = ttk.LabelFrame(self.control_frame, text="Analysis Mode", padding=5)
-        self.analysis_mode_frame.grid(row=0, column=0, columnspan=3, sticky='ew', pady=(0,10))
+        self.load_buttons_frame = ttk.LabelFrame(self.control_frame, text="Analysis Mode", padding=5)
+        self.load_buttons_frame.grid(row=0, column=0, columnspan=3, sticky='ew', pady=(0,10))
         
-        # Mode radio buttons
-        mode_radio_frame = ttk.Frame(self.analysis_mode_frame)
-        mode_radio_frame.pack(fill='x')
+        # Two direct load buttons
+        buttons_container = ttk.Frame(self.load_buttons_frame)
+        buttons_container.pack(fill='x', pady=(0,5))
         
-        self.calibration_radio = ttk.Radiobutton(
-            mode_radio_frame, 
-            text="Calibration", 
-            variable=self.analysis_mode_var, 
-            value='calibration',
-            command=self._on_analysis_mode_change
+        self.calibration_load_button = ttk.Button(
+            buttons_container, 
+            text="Load for Calibration", 
+            command=self._load_for_calibration
         )
-        self.calibration_radio.pack(side='left', padx=(0,20))
+        self.calibration_load_button.pack(side='left', padx=(0,10), fill='x', expand=True)
         
-        self.verification_radio = ttk.Radiobutton(
-            mode_radio_frame, 
-            text="Verification", 
-            variable=self.analysis_mode_var, 
-            value='verification',
-            command=self._on_analysis_mode_change
+        self.verification_load_button = ttk.Button(
+            buttons_container, 
+            text="Load for Verification", 
+            command=self._load_for_verification
         )
-        self.verification_radio.pack(side='left')
+        self.verification_load_button.pack(side='left', fill='x', expand=True)
         
         # Mode description label
         self.mode_description = ttk.Label(
-            self.analysis_mode_frame, 
-            text="Calibration: Single dataset analysis for instrument calibration",
+            self.load_buttons_frame, 
+            text="Current Mode: Calibration (Single dataset analysis)",
             font=FONT_HINT_TEXT,
             foreground='blue'
         )
         self.mode_description.pack(anchor='w', pady=(5,0))
         
-        # === FILE LOADING CONTROLS ===
-        ttk.Label(self.control_frame, text="Data File:").grid(row=1, column=0, sticky='w', pady=2)
-
-        # Single smart file loading button (full width)
-        self.smart_load_button = ttk.Button(
-            self.control_frame, 
-            text="Load CSV File", 
-            command=self.smart_load_files
-        )
-        self.smart_load_button.grid(row=1, column=1, columnspan=2, sticky='ew', pady=2)
-        
         # Queue status display
         self.queue_status_frame = ttk.Frame(self.control_frame)
-        self.queue_status_frame.grid(row=2, column=0, columnspan=3, sticky='ew', pady=2)
+        self.queue_status_frame.grid(row=1, column=0, columnspan=3, sticky='ew', pady=2)
         
         self.queue_status_label = ttk.Label(self.queue_status_frame, text="", font=FONT_STATUS)
         self.queue_status_label.pack(anchor='w')
         
         # === LOADED DATASETS FRAME ===
         self.dataset_list_frame = ttk.LabelFrame(self.control_frame, text="Loaded Datasets", padding=5)
-        self.dataset_list_frame.grid(row=3, column=0, columnspan=3, sticky='ew', pady=(10,10))
+        self.dataset_list_frame.grid(row=2, column=0, columnspan=3, sticky='ew', pady=(10,10)) 
         
         # Dataset treeview with scrollbar - REDUCED HEIGHT to 8 rows with separate columns
         list_container = ttk.Frame(self.dataset_list_frame)
@@ -426,7 +410,7 @@ class MainWindow:
         )
         self.gaussian_info_btn.grid(row=12, column=2, sticky='w', padx=(10,0), pady=2)
 
-        # Plot button
+        # Plot button (all row numbers updated)
         self.plot_button = ttk.Button(self.control_frame, text="Create Plot", 
                                      command=self.create_plot, state='disabled')
         self.plot_button.grid(row=13, column=0, columnspan=2, sticky='ew', pady=10)
@@ -470,9 +454,6 @@ class MainWindow:
         # Pack the plot frame inside the right scrollable frame
         self.plot_frame.pack(fill='both', expand=True, padx=5, pady=5)
         
-        # Remove the old main_frame since we're not using it anymore
-        # (plot_frame is now directly in plot_scrollable_frame)
-        
         # Create placeholder for plot content (will be filled when plot is created)
         plot_content_frame = ttk.Frame(self.plot_frame)
         plot_content_frame.pack(fill='both', expand=True)
@@ -485,7 +466,62 @@ class MainWindow:
                                       justify='center')
         self.no_plot_label.pack(expand=True)
     
-    # === NEW: TAG EDITING METHODS ===
+    # === DIRECT LOAD METHODS ===
+    
+    def _load_for_calibration(self):
+        """Direct calibration loading - sets mode and loads single file."""
+        # Check if we need to clear existing datasets
+        if not self._confirm_clear_datasets_if_needed():
+            return  # User cancelled
+            
+        self.analysis_mode_var.set('calibration')
+        self._update_analysis_mode_ui()
+        self._load_single_file_with_preview()
+        
+    def _load_for_verification(self):
+        """Direct verification loading - sets mode and loads multiple files."""
+        if not self._confirm_clear_datasets_if_needed():
+            return  # User cancelled
+     
+        self.analysis_mode_var.set('verification') 
+        self._update_analysis_mode_ui()
+        self.load_multiple_files()
+    
+    def _confirm_clear_datasets_if_needed(self):
+        """
+        Returns:
+            bool: True if user confirmed or no datasets to clear, False if cancelled
+        """
+        if not self.dataset_manager.has_datasets():
+            return True  # No datasets to clear, proceed
+        
+        dataset_count = self.dataset_manager.get_dataset_count()
+        dataset_names = [dataset['tag'] for dataset in self.dataset_manager.get_all_datasets()]
+        
+        # Create confirmation message
+        if dataset_count == 1:
+            message = f"This will remove the currently loaded dataset:\n• {dataset_names[0]}\n\nContinue?"
+        else:
+            dataset_list = '\n'.join([f"• {name}" for name in dataset_names[:5]])  # Show first 5
+            if dataset_count > 5:
+                dataset_list += f"\n• ... and {dataset_count - 5} more"
+            message = f"This will remove all {dataset_count} currently loaded datasets:\n\n{dataset_list}\n\nContinue?"
+        
+        result = messagebox.askyesno(
+            "Clear Current Datasets", 
+            message,
+            icon='warning'
+        )
+        
+        if result:
+            # Clear all datasets
+            self.dataset_manager.clear_all_datasets()
+            self._clear_ui_for_no_datasets()
+            logger.info(f"Cleared {dataset_count} datasets before loading new data")
+            
+        return result
+
+    # === TAG EDITING METHODS ===
     
     def _on_tag_var_change(self, *args):
         """Handle tag variable changes (real-time typing)."""
@@ -577,46 +613,40 @@ class MainWindow:
     # === ANALYSIS MODE MANAGEMENT METHODS ===
     
     def _on_analysis_mode_change(self):
-        """Handle analysis mode change (calibration vs verification)."""
+        """This method is no longer called by radio buttons, but kept for internal mode changes."""
         mode = self.analysis_mode_var.get()
         logger.info(f"Analysis mode changed to: {mode}")
         
         # Update mode description
         if mode == 'calibration':
             self.mode_description.config(
-                text="Calibration: Single dataset analysis for instrument calibration",
+                text="Current Mode: Calibration (Single dataset analysis)",
                 foreground='blue'
             )
         else:  # verification
             self.mode_description.config(
-                text="Verification: Multi-dataset comparison and validation analysis",
+                text="Current Mode: Verification (Multi-dataset comparison)",
                 foreground='green'
             )
         
         # Update UI elements based on mode
         self._update_analysis_mode_ui()
-        
-        # In calibration mode, if we have multiple datasets, show a warning
-        if mode == 'calibration' and self.dataset_manager.get_dataset_count() > 1:
-            result = messagebox.askyesno(
-                "Calibration Mode",
-                "Calibration mode is optimized for single dataset analysis.\n\n"
-                "Would you like to remove all but the active dataset?\n\n"
-                "Click 'No' to keep all datasets (you can manually remove extras later)."
-            )
-            if result:
-                self._keep_only_active_dataset()
     
     def _update_analysis_mode_ui(self):
         """Update UI elements based on the current analysis mode."""
         mode = self.analysis_mode_var.get()
         is_calibration = (mode == 'calibration')
         
-        # Update smart button text based on mode
         if is_calibration:
-            self.smart_load_button.config(text="📄 Load CSV File")
-        else:  # verification mode
-            self.smart_load_button.config(text="📁 Load Data Files")
+            self.mode_description.config(
+                text="Current Mode: Calibration (Single dataset analysis)",
+                foreground='blue'
+            )
+        else:
+            self.mode_description.config(
+                text="Current Mode: Verification (Multi-dataset comparison)",
+                foreground='green'
+            )
         
         # Update other UI elements based on mode
         self._update_report_button_state_for_mode()
@@ -684,17 +714,6 @@ class MainWindow:
         )
     
     # === FILE LOADING METHODS ===
-    
-    def smart_load_files(self):
-        """Smart file loading that adapts to analysis mode."""
-        mode = self.analysis_mode_var.get()
-        
-        if mode == 'calibration':
-            # Calibration mode: single file loading with enhanced preview
-            self._load_single_file_with_preview()
-        else:
-            # Verification mode: direct multi-file loading (CHANGED)
-            self.load_multiple_files()
 
     def _load_single_file_with_preview(self):
         """Load a single file with automatic preview option."""
@@ -707,14 +726,6 @@ class MainWindow:
             # Create and show the preview dialog
             preview_dialog = FilePreviewDialog(self.root, file_path, self._handle_file_load)
             preview_dialog.show()
-
-    def _handle_load_choice(self, choice: str):
-        """Handle the user's choice from the load choice dialog."""
-        if choice == 'single':
-            self._load_single_file_with_preview()
-        elif choice == 'multiple':
-            self.load_multiple_files()
-        # If choice == 'cancel', do nothing
 
     def _handle_file_load(self, file_path: str, tag: str, skip_rows: int):
         """Handle file loading from the preview dialog callback."""
@@ -753,16 +764,7 @@ class MainWindow:
             messagebox.showerror("Error", f"Failed to load file: {str(e)}")
 
     def load_multiple_files(self):
-        """Load multiple CSV files using file queue system."""
-        # Check mode restriction first
-        if self.analysis_mode_var.get() == 'calibration':
-            messagebox.showwarning(
-                "Mode Restriction", 
-                "Multiple file loading is only available in Verification mode.\n\n"
-                "Switch to Verification mode to load multiple files for comparison analysis."
-            )
-            return
-        
+        """Load multiple CSV files using file queue system (removed mode restriction)."""
         file_paths = filedialog.askopenfilenames(
             title="Select CSV files",
             filetypes=SUPPORTED_FILE_TYPES
@@ -1461,7 +1463,8 @@ class MainWindow:
 This section helps you manage multiple datasets in the Particle Data Analyzer.
 
 LOADING DATA:
-• Use "Load CSV File" (Calibration mode) or "Load Data Files" (Verification mode)
+• Use "Load for Calibration" for single file analysis
+• Use "Load for Verification" for multiple file comparison
 • The file preview dialog lets you set bead size and skip header rows
 • Each dataset gets a unique color and appears in the "Loaded Datasets" list
 
