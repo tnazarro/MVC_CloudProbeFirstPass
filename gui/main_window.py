@@ -175,6 +175,7 @@ class MainWindow:
         self._update_data_mode_ui()
         self._update_dataset_ui()
         self._update_analysis_mode_ui()
+        self._setup_keyboard_shortcuts()
     
     def _create_widgets(self):
         """Create all GUI widgets."""
@@ -1210,6 +1211,69 @@ class MainWindow:
         else:
             self.queue_status_label.config(text=f"Queue ready: {info['total_files']} files")
     
+    # === KEYBOARD SHORTCUTS ===
+
+    def _setup_keyboard_shortcuts(self):
+        """Setup keyboard shortcuts for the main window."""
+        # Bind to root window so shortcuts work globally when main window has focus
+        self.root.bind('<Key>', self._handle_global_keypress)
+        
+        # Make sure the main window can receive focus for keyboard events
+        self.root.focus_set()
+
+    def _handle_global_keypress(self, event):
+        """Handle global keyboard shortcuts."""
+        # Only process if we have datasets loaded
+        if not self.dataset_manager.has_datasets():
+            return
+        
+        key = event.keysym.lower()
+        
+        # Arrow key navigation between datasets
+        if key in ['up', 'left']:
+            self._navigate_dataset_previous()
+            return 'break'  # Prevent default behavior
+        elif key in ['down', 'right']:
+            self._navigate_dataset_next()
+            return 'break'
+        
+        # Enter or Space to create/update plot
+        elif key in ['return', 'space']:
+            if self.plot_button['state'] == 'normal':
+                self.create_plot()
+            return 'break'
+
+    def _navigate_dataset_previous(self):
+        """Navigate to previous dataset with UI updates."""
+        if self.dataset_manager.get_dataset_count() > 1:
+            prev_id = self.dataset_manager.get_previous_dataset_id()
+            if prev_id:
+                self.dataset_manager.set_active_dataset(prev_id)
+                self._load_active_dataset_settings()
+                self._update_dataset_ui()
+                self._update_column_combos()
+                self._update_stats_display()
+                
+                # Auto-update plot if one exists
+                if hasattr(self, 'canvas'):
+                    self._update_plot()
+
+    def _navigate_dataset_next(self):
+        """Navigate to next dataset with UI updates."""
+        if self.dataset_manager.get_dataset_count() > 1:
+            next_id = self.dataset_manager.get_next_dataset_id()
+            if next_id:
+                self.dataset_manager.set_active_dataset(next_id)
+                self._load_active_dataset_settings()
+                self._update_dataset_ui()
+                self._update_column_combos()
+                self._update_stats_display()
+                
+                # Auto-update plot if one exists
+                if hasattr(self, 'canvas'):
+                    self._update_plot()
+
+
     # === UPDATED DATASET MANAGEMENT METHODS ===
     
     def _update_dataset_ui(self):
