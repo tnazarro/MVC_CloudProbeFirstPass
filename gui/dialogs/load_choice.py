@@ -95,14 +95,13 @@ class LoadChoiceDialog:
             foreground='blue'
         )
         
-        # Single file button
+        # Single file button with shortcut indicator
         self.single_btn = ttk.Button(
             self.single_frame, 
-            text="📄 Load Single File",
+            text="📄 Load Single File (1 or Enter)",
             command=self._choice_single_file,
-            width=20
+            width=25
         )
-        
         # === MULTIPLE FILES SECTION ===
         self.multi_frame = ttk.LabelFrame(self.button_frame, text="Multiple Files", padding=15)
         
@@ -114,12 +113,12 @@ class LoadChoiceDialog:
             foreground='green'
         )
         
-        # Multiple files button
+        # Multiple files button with shortcut indicator
         self.multi_btn = ttk.Button(
             self.multi_frame, 
-            text="📁 Load Multiple Files",
+            text="📁 Load Multiple Files (2)",
             command=self._choice_multiple_files,
-            width=20
+            width=25
         )
         
         # === CANCEL BUTTON ===
@@ -155,9 +154,12 @@ class LoadChoiceDialog:
         
     def _setup_event_handlers(self) -> None:
         """Setup event handlers for the dialog."""
-        # Set focus and bind escape key
+        # Set focus and bind keyboard shortcuts
         self.dialog.focus_set()
         self.dialog.bind('<Escape>', lambda e: self._on_cancel())
+        self.dialog.bind('<1>', lambda e: self._choice_single_file())  # Key '1' for single
+        self.dialog.bind('<2>', lambda e: self._choice_multiple_files())  # Key '2' for multiple
+        self.dialog.bind('<Return>', lambda e: self._choice_single_file())  # Enter defaults to single
         
         # Focus on single file button by default
         self.single_btn.focus_set()

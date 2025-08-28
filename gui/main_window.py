@@ -173,6 +173,7 @@ class MainWindow:
         self._update_data_mode_ui()
         self._update_dataset_ui()
         self._update_analysis_mode_ui()
+        self._setup_keyboard_shortcuts()
     
     def _create_widgets(self):
         """Create all GUI widgets."""
@@ -954,6 +955,16 @@ class MainWindow:
             )
             skip_hint_label.grid(row=1, column=2, sticky='w', padx=(10,0), pady=(10,0))
             
+            # Enhanced keyboard shortcuts for queue preview
+            preview_window.bind('<Return>', lambda e: load_current_file())
+            preview_window.bind('<Escape>', lambda e: cancel_queue())
+            preview_window.bind('<Control-s>', lambda e: skip_current_file())  # Ctrl+S to skip
+            preview_window.bind('<Control-r>', lambda e: self._refresh_current_queue_preview())
+            
+            # Tab navigation
+            tag_entry.bind('<Tab>', lambda e: skip_entry.focus_set())
+            skip_entry.bind('<Tab>', lambda e: preview_window.focus_set())
+
             # Buttons
             button_frame = ttk.Frame(preview_window)
             button_frame.pack(fill='x', padx=10, pady=10)
@@ -1098,6 +1109,87 @@ class MainWindow:
         else:
             self.queue_status_label.config(text=f"Queue ready: {info['total_files']} files")
     
+    # === KEYBOARD SHORTCUTS ===
+
+    def _setup_keyboard_shortcuts(self):
+        """Setup keyboard shortcuts for the main window."""
+        # Bind to root window so shortcuts work globally when main window has focus
+        self.root.bind('<Key>', self._handle_global_keypress)
+        
+        # Make sure the main window can receive focus for keyboard events
+        self.root.focus_set()
+
+    def _handle_global_keypress(self, event):
+        """Handle global keyboard shortcuts."""
+        key = event.keysym.lower()
+        state = event.state
+
+        # Check for Ctrl key combinations
+        ctrl_pressed = (state & 0x4) != 0  # Ctrl key mask
+        shift_pressed = (state & 0x1) != 0  # Shift key mask
+                
+        # File loading shortcuts
+        if ctrl_pressed and key == 'o':
+            if shift_pressed:
+                # Ctrl+Shift+O: Load multiple files
+                self._load_for_verification()
+            else:
+                # Ctrl+O: Load single file
+                self._load_for_calibration()
+            return 'break'
+        
+        # Only process dataset navigation if we have datasets loaded
+        if not self.dataset_manager.has_datasets():
+            return
+        
+        # Enter or Space to create/update plot (when not in an entry widget)
+        if key in ['return', 'space']:
+            # Check if focus is on an entry widget to avoid conflicts
+            focused_widget = self.root.focus_get()
+            if not isinstance(focused_widget, (tk.Entry, tk.Text)):
+                if self.plot_button['state'] == 'normal':
+                    self.create_plot()
+                return 'break'
+
+        # Arrow key navigation between datasets
+        if key in ['up', 'left']:
+            self._navigate_dataset_previous()
+            return 'break'  # Prevent default behavior
+        elif key in ['down', 'right']:
+            self._navigate_dataset_next()
+            return 'break'
+
+    def _navigate_dataset_previous(self):
+        """Navigate to previous dataset with UI updates."""
+        if self.dataset_manager.get_dataset_count() > 1:
+            prev_id = self.dataset_manager.get_previous_dataset_id()
+            if prev_id:
+                self.dataset_manager.set_active_dataset(prev_id)
+                self._load_active_dataset_settings()
+                self._update_dataset_ui()
+                self._update_column_combos()
+                self._update_stats_display()
+                
+                # Auto-update plot if one exists
+                if hasattr(self, 'canvas'):
+                    self._update_plot()
+
+    def _navigate_dataset_next(self):
+        """Navigate to next dataset with UI updates."""
+        if self.dataset_manager.get_dataset_count() > 1:
+            next_id = self.dataset_manager.get_next_dataset_id()
+            if next_id:
+                self.dataset_manager.set_active_dataset(next_id)
+                self._load_active_dataset_settings()
+                self._update_dataset_ui()
+                self._update_column_combos()
+                self._update_stats_display()
+                
+                # Auto-update plot if one exists
+                if hasattr(self, 'canvas'):
+                    self._update_plot()
+
+
     # === UPDATED DATASET MANAGEMENT METHODS ===
     
     def _update_dataset_ui(self):
