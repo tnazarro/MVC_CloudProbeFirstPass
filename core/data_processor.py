@@ -10,8 +10,6 @@ from config.constants import SIZE_COLUMN_NAMES, FREQUENCY_COLUMN_NAMES, RANDOM_D
 
 logger = logging.getLogger(__name__)
 
-#TODO: Improve instrument type detection to handle more formats and edge cases
-
 class ParticleDataProcessor:
     """Handles loading and processing of particle sizing data."""
     
