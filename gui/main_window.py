@@ -226,11 +226,10 @@ class MainWindow:
         # Single smart file loading button (full width)
         self.smart_load_button = ttk.Button(
             self.control_frame, 
-            text="Load CSV File", 
+            text="Load CSV File (Ctrl+O)", 
             command=self.smart_load_files
         )
-        self.smart_load_button.grid(row=1, column=1, columnspan=2, sticky='ew', pady=2)
-        
+
         # Queue status display
         self.queue_status_frame = ttk.Frame(self.control_frame)
         self.queue_status_frame.grid(row=2, column=0, columnspan=3, sticky='ew', pady=2)
@@ -654,11 +653,11 @@ class MainWindow:
         mode = self.analysis_mode_var.get()
         is_calibration = (mode == 'calibration')
         
-        # Update smart button text based on mode
+        # Update smart button text based on mode with keyboard shortcuts
         if is_calibration:
-            self.smart_load_button.config(text="📄 Load CSV File")
+            self.smart_load_button.config(text="📄 Load CSV File (Ctrl+O)")
         else:  # verification mode
-            self.smart_load_button.config(text="📁 Load Data Files")
+            self.smart_load_button.config(text="📁 Load Data Files (Ctrl+Shift+O)")
         
         # Update other UI elements based on mode
         self._update_report_button_state_for_mode()
@@ -1067,6 +1066,16 @@ class MainWindow:
             )
             skip_hint_label.grid(row=1, column=2, sticky='w', padx=(10,0), pady=(10,0))
             
+            # Enhanced keyboard shortcuts for queue preview
+            preview_window.bind('<Return>', lambda e: load_current_file())
+            preview_window.bind('<Escape>', lambda e: cancel_queue())
+            preview_window.bind('<Control-s>', lambda e: skip_current_file())  # Ctrl+S to skip
+            preview_window.bind('<Control-r>', lambda e: self._refresh_current_queue_preview())
+            
+            # Tab navigation
+            tag_entry.bind('<Tab>', lambda e: skip_entry.focus_set())
+            skip_entry.bind('<Tab>', lambda e: preview_window.focus_set())
+
             # Buttons
             button_frame = ttk.Frame(preview_window)
             button_frame.pack(fill='x', padx=10, pady=10)
@@ -1223,24 +1232,42 @@ class MainWindow:
 
     def _handle_global_keypress(self, event):
         """Handle global keyboard shortcuts."""
-        # Only process if we have datasets loaded
+        key = event.keysym.lower()
+        state = event.state
+
+        # Check for Ctrl key combinations
+        ctrl_pressed = (state & 0x4) != 0  # Ctrl key mask
+        shift_pressed = (state & 0x1) != 0  # Shift key mask
+                
+        # File loading shortcuts
+        if ctrl_pressed and key == 'o':
+            if shift_pressed:
+                # Ctrl+Shift+O: Load multiple files
+                self.load_multiple_files()
+            else:
+                # Ctrl+O: Load single file
+                self._load_single_file_with_preview()
+            return 'break'
+        
+        # Only process dataset navigation if we have datasets loaded
         if not self.dataset_manager.has_datasets():
             return
         
-        key = event.keysym.lower()
-        
+        # Enter or Space to create/update plot (when not in an entry widget)
+        if key in ['return', 'space']:
+            # Check if focus is on an entry widget to avoid conflicts
+            focused_widget = self.root.focus_get()
+            if not isinstance(focused_widget, (tk.Entry, tk.Text)):
+                if self.plot_button['state'] == 'normal':
+                    self.create_plot()
+                return 'break'
+
         # Arrow key navigation between datasets
         if key in ['up', 'left']:
             self._navigate_dataset_previous()
             return 'break'  # Prevent default behavior
         elif key in ['down', 'right']:
             self._navigate_dataset_next()
-            return 'break'
-        
-        # Enter or Space to create/update plot
-        elif key in ['return', 'space']:
-            if self.plot_button['state'] == 'normal':
-                self.create_plot()
             return 'break'
 
     def _navigate_dataset_previous(self):
