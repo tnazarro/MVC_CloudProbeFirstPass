@@ -31,6 +31,7 @@ RANDOM_DATA_BOUNDS = {
 PLOT_WIDTH = 8
 PLOT_HEIGHT = 6
 PLOT_DPI = 100
+EXPORT_DPI = 300
 
 # CSV file encoding support (in order of likelihood for particle analysis data)
 SUPPORTED_CSV_ENCODINGS = [
