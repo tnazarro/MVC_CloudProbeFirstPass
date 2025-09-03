@@ -988,11 +988,8 @@ class MainWindow:
             self.queue_status_label.config(text=status_text)
         else:
             self.queue_status_label.config(text=f"Queue ready: {info['total_files']} files")
-    
-    # REMOVED: _show_enhanced_queue_preview_dialog() method - ~80 lines deleted
-    # REMOVED: _validate_float_input_for_dialog() method - ~15 lines deleted
-    
-    # === DATASET MANAGEMENT METHODS (MOSTLY UNCHANGED) ===
+
+    # === DATASET MANAGEMENT METHODS ===
     
     def _update_dataset_ui(self):
         """Update all dataset-related UI elements."""
