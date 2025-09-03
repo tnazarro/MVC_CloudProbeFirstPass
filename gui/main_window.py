@@ -17,7 +17,7 @@ from core.data_processor import ParticleDataProcessor
 from core.dataset_manager import DatasetManager
 from core.plotter import ParticlePlotter
 from config.constants import (SUPPORTED_FILE_TYPES, MIN_BIN_COUNT, MAX_BIN_COUNT, DEFAULT_BIN_COUNT,
-                             FONT_PROGRESS, FONT_INSTRUMENT_TYPE, FONT_HINT_TEXT, FONT_STATUS, FONT_FILE_NAME, FONT_PREVIEW_TEXT, FONT_STATUS_LARGE)
+                             FONT_PROGRESS, FONT_INSTRUMENT_TYPE, FONT_HINT_TEXT, FONT_STATUS, FONT_FILE_NAME, FONT_PREVIEW_TEXT, FONT_STATUS_LARGE, EXPORT_DPI)
 from core.file_queue import FileQueue
 from gui.dialogs.file_preview import FilePreviewDialog
 from gui.dialogs.load_choice import LoadChoiceDialog
@@ -486,7 +486,7 @@ class MainWindow:
             title="Save Graph As",
             defaultextension=".png",
             initialfile=default_filename,
-            filetypes=[("PNG files", "*.png"), ("All files", "*.*")]
+            filetypes=[("PNG files", "*.png")]
         )
         
         if not file_path:
@@ -494,7 +494,7 @@ class MainWindow:
         
         try:
             # Save the plot using the plotter's save method
-            success = self.plotter.save_plot(file_path, dpi=300)
+            success = self.plotter.save_plot(file_path, dpi=EXPORT_DPI)
             
             if success:
                 messagebox.showinfo("Success", f"Graph saved successfully!\nSaved to: {file_path}")

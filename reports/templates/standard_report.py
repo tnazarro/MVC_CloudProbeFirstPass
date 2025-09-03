@@ -6,7 +6,6 @@ from typing import Dict, Any, Optional
 import matplotlib.figure
 from ..pdf_generator import PDFReportGenerator
 
-#ToDo: Update report template to include additional analysis details, improve layout, and add more customization options.
 
 class StandardReportTemplate:
     """Standard template for particle analysis reports."""
