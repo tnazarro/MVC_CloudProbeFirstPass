@@ -265,7 +265,7 @@ class MainWindow:
         list_container.grid_rowconfigure(0, weight=1)
         list_container.grid_columnconfigure(0, weight=1)
         
-        # === INLINE TAG EDITOR (still in dataset list frame) ===
+        # === INLINE TAG EDITOR ===
         tag_editor_frame = ttk.LabelFrame(self.dataset_list_frame, text="Bead Size (μm)", padding=5)
         tag_editor_frame.pack(fill='x', pady=(0,5))
 
@@ -302,28 +302,42 @@ class MainWindow:
         )
         self.tag_save_btn.pack(side='right')
         
-        # === COMPACT DATASET INFO (still in dataset list frame) ===
-        compact_info_frame = ttk.LabelFrame(self.dataset_list_frame, text="Dataset Info", padding=5)
-        compact_info_frame.pack(fill='x')
+        # === DATASET MANAGEMENT CONTROLS ===
+        self.dataset_mgmt_frame = ttk.LabelFrame(self.control_frame, text="Dataset Management", padding=5)
+        self.dataset_mgmt_frame.grid(row=4, column=0, columnspan=3, sticky='ew', pady=5)
         
-        # Compact info display - single label with key info
-        self.compact_info_label = ttk.Label(
-            compact_info_frame, 
-            text="No datasets loaded", 
-            font=FONT_STATUS,
-            wraplength=250,  # Adjusted for left column width
-            justify='left'
-        )
-        self.compact_info_label.pack(anchor='w', fill='x')
+        # Dataset actions
+        actions_frame = ttk.Frame(self.dataset_mgmt_frame)
+        actions_frame.pack(fill='x', pady=5)
+        
+        self.edit_notes_btn = ttk.Button(actions_frame, text="Edit Notes", 
+                                        command=self.edit_dataset_notes, state='disabled')
+        self.edit_notes_btn.pack(side='left', padx=(0,5))
+        
+        self.remove_dataset_btn = ttk.Button(actions_frame, text="Remove", 
+                                            command=self.remove_dataset, state='disabled')
+        self.remove_dataset_btn.pack(side='left', padx=(0,5))
+        
+        # Help button
+        self.help_btn = ttk.Button(actions_frame, text="?", width=3,
+                                  command=self.show_help_dialog)
+        self.help_btn.pack(side='right')
+        
+        # === DATA INFO (stats) ===
+        self.stats_frame = ttk.LabelFrame(self.control_frame, text="Data Info", padding=5)
+        self.stats_frame.grid(row=5, column=0, columnspan=3, sticky='ew', pady=5)
+        
+        self.stats_text = tk.Text(self.stats_frame, height=8, width=30)
+        self.stats_text.pack(fill='both', expand=True)
         
         # === DATA ANALYSIS CONTROLS ===
-        ttk.Separator(self.control_frame, orient='horizontal').grid(row=3, column=0, columnspan=3, sticky='ew', pady=5)
+        ttk.Separator(self.control_frame, orient='horizontal').grid(row=6, column=0, columnspan=3, sticky='ew', pady=5)
         
         # Data mode selection
-        ttk.Label(self.control_frame, text="Data Type:").grid(row=4, column=0, sticky='w', pady=2) 
+        ttk.Label(self.control_frame, text="Data Type:").grid(row=7, column=0, sticky='w', pady=2)
         
         data_mode_frame = ttk.Frame(self.control_frame)
-        data_mode_frame.grid(row=4, column=1, columnspan=2, sticky='ew', pady=2)
+        data_mode_frame.grid(row=7, column=1, columnspan=2, sticky='ew', pady=2)
         
         self.pre_agg_radio = ttk.Radiobutton(data_mode_frame, text="Pre-aggregated (Size + Frequency)", 
                                            variable=self.data_mode_var, value='pre_aggregated',
@@ -336,25 +350,25 @@ class MainWindow:
         self.raw_radio.grid(row=1, column=0, sticky='w')
         
         #Column selection
-        ttk.Label(self.control_frame, text="Size Column:").grid(row=5, column=0, sticky='w', pady=2)
+        ttk.Label(self.control_frame, text="Size Column:").grid(row=8, column=0, sticky='w', pady=2)
         self.size_combo = ttk.Combobox(self.control_frame, textvariable=self.size_column_var, 
                                     state='readonly')
-        self.size_combo.grid(row=5, column=1, sticky='ew', pady=2)
+        self.size_combo.grid(row=8, column=1, sticky='ew', pady=2)
         self.size_combo.bind('<<ComboboxSelected>>', self._on_column_change)
 
         self.frequency_label = ttk.Label(self.control_frame, text="Frequency Column:")
-        self.frequency_label.grid(row=6, column=0, sticky='w', pady=2)
+        self.frequency_label.grid(row=9, column=0, sticky='w', pady=2)
         self.frequency_combo = ttk.Combobox(self.control_frame, textvariable=self.frequency_column_var, 
                                         state='readonly')
-        self.frequency_combo.grid(row=6, column=1, sticky='ew', pady=2)
+        self.frequency_combo.grid(row=9, column=1, sticky='ew', pady=2)
         self.frequency_combo.bind('<<ComboboxSelected>>', self._on_column_change)
 
         # Bin count control
-        ttk.Label(self.control_frame, text="Bins:").grid(row=7, column=0, sticky='w', pady=2)
+        ttk.Label(self.control_frame, text="Bins:").grid(row=10, column=0, sticky='w', pady=2)
 
         # Create frame for bin controls
         bin_frame = ttk.Frame(self.control_frame)
-        bin_frame.grid(row=7, column=1, columnspan=2, sticky='ew', pady=2)
+        bin_frame.grid(row=10, column=1, columnspan=2, sticky='ew', pady=2)
 
         # Bin count entry field only (remove slider)
         self.bin_entry = ttk.Entry(bin_frame, textvariable=self.bin_count_var, width=8)
@@ -376,7 +390,7 @@ class MainWindow:
                                                 text="Show Mean & Std Dev Lines", 
                                                 variable=self.show_stats_lines_var,
                                                 command=self._on_stats_toggle)
-        self.stats_lines_check.grid(row=8, column=0, columnspan=2, sticky='w', pady=2)
+        self.stats_lines_check.grid(row=11, column=0, columnspan=2, sticky='w', pady=2)
         
         # Gaussian curve fitting toggle
         self.gaussian_fit_check = ttk.Checkbutton(
@@ -385,7 +399,7 @@ class MainWindow:
             variable=self.show_gaussian_fit_var,
             command=self._on_gaussian_toggle
         )
-        self.gaussian_fit_check.grid(row=9, column=0, columnspan=2, sticky='w', pady=2)
+        self.gaussian_fit_check.grid(row=12, column=0, columnspan=2, sticky='w', pady=2)
 
         # Gaussian fit info button
         self.gaussian_info_btn = ttk.Button(
@@ -395,54 +409,23 @@ class MainWindow:
             state='disabled',
             width=10
         )
-        self.gaussian_info_btn.grid(row=9, column=2, sticky='w', padx=(10,0), pady=2)
+        self.gaussian_info_btn.grid(row=12, column=2, sticky='w', padx=(10,0), pady=2)
 
         # Plot button (all row numbers updated)
         self.plot_button = ttk.Button(self.control_frame, text="Create Plot", 
                                      command=self.create_plot, state='disabled')
-        self.plot_button.grid(row=10, column=0, columnspan=2, sticky='ew', pady=10)
+        self.plot_button.grid(row=13, column=0, columnspan=2, sticky='ew', pady=10)
         
         # Report generation button - will be mode-restricted
         self.report_button = ttk.Button(self.control_frame, text="Generate Report", 
                                        command=self.generate_report, state='disabled')
-        self.report_button.grid(row=11, column=0, columnspan=2, sticky='ew', pady=5)
+        self.report_button.grid(row=14, column=0, columnspan=2, sticky='ew', pady=5)
         
         # Show/hide report button based on availability
         if not REPORTS_AVAILABLE:
             self.report_button.config(state='disabled', text="Generate Report (ReportLab not installed)")
         
-        # === DATASET MANAGEMENT CONTROLS ===
-        ttk.Separator(self.control_frame, orient='horizontal').grid(row=12, column=0, columnspan=3, sticky='ew', pady=10)
-        
-        # Dataset management frame (navigation buttons moved to plot frame)
-        self.dataset_mgmt_frame = ttk.LabelFrame(self.control_frame, text="Dataset Management", padding=5)
-        self.dataset_mgmt_frame.grid(row=13, column=0, columnspan=3, sticky='ew', pady=5)
-        
-        # Dataset actions (navigation buttons moved to plot frame)
-        actions_frame = ttk.Frame(self.dataset_mgmt_frame)
-        actions_frame.pack(fill='x', pady=5)
-        
-        self.edit_notes_btn = ttk.Button(actions_frame, text="Edit Notes", 
-                                        command=self.edit_dataset_notes, state='disabled')
-        self.edit_notes_btn.pack(side='left', padx=(0,5))
-        
-        self.remove_dataset_btn = ttk.Button(actions_frame, text="Remove", 
-                                            command=self.remove_dataset, state='disabled')
-        self.remove_dataset_btn.pack(side='left', padx=(0,5))
-        
-        # Help button
-        self.help_btn = ttk.Button(actions_frame, text="?", width=3,
-                                  command=self.show_help_dialog)
-        self.help_btn.pack(side='right')
-        
-        # Stats display
-        self.stats_frame = ttk.LabelFrame(self.control_frame, text="Data Info", padding=5)
-        self.stats_frame.grid(row=14, column=0, columnspan=3, sticky='ew', pady=5)
-        
-        self.stats_text = tk.Text(self.stats_frame, height=8, width=30)
-        self.stats_text.pack(fill='both', expand=True)
-        
-        # === PLOT FRAME (Right side - now inside its own scrollable frame) ===
+        # === PLOT FRAME ===
         self.plot_frame = ttk.LabelFrame(self.plot_scrollable_frame.scrollable_frame, text="Plot", padding=10)
         
         # Add navigation controls to plot frame (moved from dataset management)
@@ -1017,6 +1000,7 @@ class MainWindow:
         self._update_compact_dataset_info()
         self._update_navigation_buttons()
         self._update_tag_editor()
+        self._update_tag_editor()
     
     def _update_dataset_treeview(self):
         """Update the dataset treeview with current datasets in manager order."""
@@ -1050,40 +1034,6 @@ class MainWindow:
         
         # Configure tag styling
         self.dataset_treeview.tag_configure('dataset', foreground='black')
-    
-    def _update_compact_dataset_info(self):
-        """Update the compact dataset info display."""
-        active_dataset = self.dataset_manager.get_active_dataset()
-        
-        if active_dataset:
-            # Build compact info string
-            info_parts = []
-            
-            # Filename
-            if active_dataset['filename'] != 'Generated Data':
-                info_parts.append(f"File: {active_dataset['filename']}")
-            else:
-                info_parts.append("File: Generated Data")
-            
-            instrument_type = active_dataset['data_processor'].get_instrument_type()
-            info_parts.append(f"Instrument: {instrument_type}")
-            
-            # Notes preview (first 50 chars if present)
-            if active_dataset['notes']:
-                notes_preview = active_dataset['notes'][:50]
-                if len(active_dataset['notes']) > 50:
-                    notes_preview += "..."
-                info_parts.append(f"Notes: {notes_preview}")
-            
-            # Data counts
-            stats = active_dataset['data_processor'].get_data_stats()
-            if 'total_rows' in stats:
-                info_parts.append(f"Rows: {stats['total_rows']}")
-            
-            info_text = "\n".join(info_parts)
-            self.compact_info_label.config(text=info_text)
-        else:
-            self.compact_info_label.config(text="No datasets loaded")
 
     def _update_navigation_buttons(self):
         """Update the state of navigation and action buttons."""
@@ -1117,7 +1067,7 @@ class MainWindow:
                     
                     self._load_active_dataset_settings()
                     self._update_compact_dataset_info()
-                    self._update_tag_editor()
+                    self._update_tag_editor()  # Update tag editor when selection changes
                     self._update_column_combos()
                     self._update_stats_display()
                     
