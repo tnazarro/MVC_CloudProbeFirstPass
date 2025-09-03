@@ -11,12 +11,13 @@ import logging
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 import matplotlib.pyplot as plt
 import numpy as np
+from datetime import datetime
 
 from core.data_processor import ParticleDataProcessor
 from core.dataset_manager import DatasetManager
 from core.plotter import ParticlePlotter
 from config.constants import (SUPPORTED_FILE_TYPES, MIN_BIN_COUNT, MAX_BIN_COUNT, DEFAULT_BIN_COUNT,
-                             FONT_PROGRESS, FONT_INSTRUMENT_TYPE, FONT_HINT_TEXT, FONT_STATUS, FONT_FILE_NAME, FONT_PREVIEW_TEXT, FONT_STATUS_LARGE)
+                             FONT_PROGRESS, FONT_INSTRUMENT_TYPE, FONT_HINT_TEXT, FONT_STATUS, FONT_FILE_NAME, FONT_PREVIEW_TEXT, FONT_STATUS_LARGE, EXPORT_DPI)
 from core.file_queue import FileQueue
 from gui.dialogs.file_preview import FilePreviewDialog
 from gui.dialogs.load_choice import LoadChoiceDialog
@@ -449,17 +450,60 @@ class MainWindow:
         plot_nav_frame = ttk.Frame(self.plot_frame)
         plot_nav_frame.pack(fill='x', pady=(0, 10))
         
-        # Dataset navigation buttons (moved here from dataset management frame)
+        # Dataset navigation buttons with save graph button in the middle
         self.prev_dataset_btn = ttk.Button(plot_nav_frame, text="◀ Previous Dataset", 
                                           command=self.previous_dataset, state='disabled')
-        self.prev_dataset_btn.pack(side='left', padx=(0,10))
+        self.prev_dataset_btn.pack(side='left')
+        
+        self.save_graph_btn = ttk.Button(plot_nav_frame, text="💾 Save Graph", 
+                                        command=self.save_graph, state='disabled')
+        self.save_graph_btn.pack(side='left', padx=25) #Space based on left button; may be a better way to do this
         
         self.next_dataset_btn = ttk.Button(plot_nav_frame, text="Next Dataset ▶", 
                                           command=self.next_dataset, state='disabled')
-        self.next_dataset_btn.pack(side='left')
+        self.next_dataset_btn.pack(side='right')
         
         # Configure column weights
         self.control_frame.columnconfigure(1, weight=1)
+    
+    def save_graph(self):
+        """Save the current graph as a PNG image."""
+        if not hasattr(self, 'canvas') or not self.current_figure:
+            messagebox.showerror("Error", "No graph to save. Please create a plot first.")
+            return
+        
+        active_dataset = self.dataset_manager.get_active_dataset()
+        if not active_dataset:
+            messagebox.showerror("Error", "No active dataset.")
+            return
+        
+        # Generate default filename with dataset tag and timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        dataset_tag = active_dataset['tag'].replace('.', '_').replace(' ', '_')
+        default_filename = f"{dataset_tag}_bead_size_{timestamp}.png"
+        
+        # Show save file dialog
+        file_path = filedialog.asksaveasfilename(
+            title="Save Graph As",
+            defaultextension=".png",
+            initialfile=default_filename,
+            filetypes=[("PNG files", "*.png")]
+        )
+        
+        if not file_path:
+            return  # User cancelled
+        
+        try:
+            # Save the plot using the plotter's save method
+            success = self.plotter.save_plot(file_path, dpi=EXPORT_DPI)
+            
+            if success:
+                messagebox.showinfo("Success", f"Graph saved successfully!\nSaved to: {file_path}")
+            else:
+                messagebox.showerror("Error", "Failed to save graph.")
+                
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to save graph: {str(e)}")
     
     def _create_layout(self):
         # Pack the left scrollable frame, and right plot scrollable frame
@@ -698,6 +742,7 @@ class MainWindow:
         mode = self.analysis_mode_var.get()
         has_datasets = self.dataset_manager.has_datasets()
         has_multiple = self.dataset_manager.get_dataset_count() > 1
+        has_plot = hasattr(self, 'canvas') and self.current_figure
         
         if mode == 'calibration':
             # In calibration mode, navigation is less relevant but still functional
@@ -707,6 +752,9 @@ class MainWindow:
             # In verification mode, navigation is fully functional
             self.prev_dataset_btn.config(state='normal' if has_multiple else 'disabled')
             self.next_dataset_btn.config(state='normal' if has_multiple else 'disabled')
+        
+        # Save graph button is enabled when there's a plot to save
+        self.save_graph_btn.config(state='normal' if has_plot else 'disabled')
     
     def _keep_only_active_dataset(self):
         """Remove all datasets except the active one (for calibration mode)."""
@@ -1718,6 +1766,7 @@ For more detailed help, please refer to the user manual or contact support."""
         # Disable plot button
         self.plot_button.config(state='disabled')
         self._update_report_button_state()
+        self._update_navigation_buttons_for_mode()  # Update navigation buttons including save graph
         
         # Clear plot if exists
         if hasattr(self, 'canvas'):
@@ -2024,6 +2073,7 @@ For more detailed help, please refer to the user manual or contact support."""
             self.current_figure = figure  # Store reference to current figure
             self._display_plot(figure)
             self._update_report_button_state()  # Enable report button when plot is created
+            self._update_navigation_buttons_for_mode()  # Update navigation buttons including save graph
             
             # Save settings
             self._save_active_dataset_settings()
@@ -2052,12 +2102,13 @@ For more detailed help, please refer to the user manual or contact support."""
                 title=plot_title,
                 show_stats_lines=self.show_stats_lines_var.get(),
                 data_mode=mode,
-                show_gaussian_fit=self.show_gaussian_fit_var.get()  # ADD THIS LINE
+                show_gaussian_fit=self.show_gaussian_fit_var.get()
             )
             
             if figure is not None:
                 self._display_plot(figure)
-                self._update_report_button_state()  # Update report button after plot update
+                self._update_report_button_state()
+                self._update_navigation_buttons_for_mode()  # Update navigation buttons including save graph
     
     def _display_plot(self, figure):
         """Display the plot in the GUI."""
@@ -2286,9 +2337,6 @@ For more detailed help, please refer to the user manual or contact support."""
 
     def _reorder_datasets(self, drag_item, target_item, drop_y):
         """Reorder datasets in both treeview and dataset manager."""
-        # DEBUG: Uncomment this line to see order comparison
-        # self.debug_orders_comparison()
-        
         try:
             # Get the dataset IDs from the treeview items BY LOOKING UP THE ACTUAL DATA
             all_items = list(self.dataset_treeview.get_children())

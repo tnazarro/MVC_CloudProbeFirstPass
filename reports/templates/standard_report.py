@@ -6,6 +6,7 @@ from typing import Dict, Any, Optional
 import matplotlib.figure
 from ..pdf_generator import PDFReportGenerator
 
+
 class StandardReportTemplate:
     """Standard template for particle analysis reports."""
     
