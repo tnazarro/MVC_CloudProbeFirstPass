@@ -994,7 +994,6 @@ class MainWindow:
     def _update_dataset_ui(self):
         """Update all dataset-related UI elements."""
         self._update_dataset_treeview()
-        self._update_compact_dataset_info()
         self._update_navigation_buttons()
         self._update_tag_editor()
         self._update_tag_editor()
@@ -1063,7 +1062,6 @@ class MainWindow:
                     self.dataset_manager.set_active_dataset(selected_dataset['id'])
                     
                     self._load_active_dataset_settings()
-                    self._update_compact_dataset_info()
                     self._update_tag_editor()  # Update tag editor when selection changes
                     self._update_column_combos()
                     self._update_stats_display()
