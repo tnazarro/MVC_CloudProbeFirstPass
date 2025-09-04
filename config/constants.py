@@ -75,7 +75,6 @@ INSTRUMENT_PREVIEW_DEFAULTS = { #TODO: Choose defaults wisely for each instrumen
     'BCPD': 15,         # BCPD instruments
     'BCP': 15,          # BCP instruments
     'GFAS': 22,         # GFAS instruments
-    'Unknown': 15,      # Default for unknown instruments
     'Generated Data': 10  # For generated/test data   
 }
 

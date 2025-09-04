@@ -12,6 +12,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolb
 import matplotlib.pyplot as plt
 import numpy as np
 from datetime import datetime
+import sys
 
 from core.data_processor import ParticleDataProcessor
 from core.dataset_manager import DatasetManager
@@ -995,7 +996,6 @@ class MainWindow:
         """Update all dataset-related UI elements."""
         self._update_dataset_treeview()
         self._update_navigation_buttons()
-        self._update_tag_editor()
         self._update_tag_editor()
     
     def _update_dataset_treeview(self):
@@ -2208,5 +2208,4 @@ For more detailed help, please refer to the user manual or contact support."""
         except Exception as e:
             logger.error(f"Error during cleanup: {e}")
             # Force exit if cleanup fails
-            import sys
             sys.exit(0)

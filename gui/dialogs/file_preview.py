@@ -402,7 +402,7 @@ class FilePreviewDialog:
             self._update_preview_text(self.preview_data['preview_lines'])
         
     def _setup_event_handlers(self) -> None:
-        """Setup event handlers including new preview controls."""
+        """Setup event handlers."""
         # Allow Enter key to refresh preview
         self.preview_lines_entry.bind('<Return>', lambda e: self._refresh_preview())
         
