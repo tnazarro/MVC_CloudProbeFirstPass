@@ -12,6 +12,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolb
 import matplotlib.pyplot as plt
 import numpy as np
 from datetime import datetime
+import sys
 
 from core.data_processor import ParticleDataProcessor
 from core.dataset_manager import DatasetManager
@@ -655,7 +656,6 @@ class MainWindow:
         
         self._updating_tag = False
     
-    # === ANALYSIS MODE MANAGEMENT METHODS ===
     
     def _on_analysis_mode_change(self):
         """This method is no longer called by radio buttons, but kept for internal mode changes."""
@@ -765,15 +765,20 @@ class MainWindow:
     # === FILE LOADING METHODS ===
 
     def _load_single_file_with_preview(self):
-        """Load a single file with automatic preview option."""
+        """Load a single file with enhanced preview dialog."""
         file_path = filedialog.askopenfilename(
             title="Select CSV file",
             filetypes=SUPPORTED_FILE_TYPES
         )
         
         if file_path:
-            # Create and show the preview dialog
-            preview_dialog = FilePreviewDialog(self.root, file_path, self._handle_file_load)
+            #Create and show the enhanced preview dialog with mode specification
+            preview_dialog = FilePreviewDialog(
+                parent=self.root, 
+                file_path=file_path, 
+                on_load_callback=self._handle_file_load,
+                mode='calibration'  # ADDED: Specify calibration mode
+            )
             preview_dialog.show()
 
     def _handle_file_load(self, file_path: str, tag: str, skip_rows: int):
@@ -830,7 +835,7 @@ class MainWindow:
                 self._update_queue_status()
                 messagebox.showinfo("Files Selected", 
                                 f"Added {added_count} files to processing queue.\n"
-                                f"Click 'Process Queue' to begin loading with preview.")
+                                f"Processing will begin with enhanced preview for each file.")
                 
                 # Start the queue processing workflow
                 self._start_queue_processing()
@@ -849,7 +854,7 @@ class MainWindow:
         self._process_current_queue_file()
 
     def _process_current_queue_file(self):
-        """Process the current file in the queue."""
+        """Process the current file in the queue using enhanced FilePreviewDialog."""
         current_file = self.file_queue.get_current_file()
         
         if not current_file:
@@ -859,200 +864,49 @@ class MainWindow:
         
         self._update_queue_status()
         
-        # Show enhanced preview for current file
-        self._show_queue_preview_dialog(current_file)
+        # CHANGED: Use enhanced FilePreviewDialog instead of custom dialog
+        self._show_unified_queue_preview(current_file)
 
-    def _show_queue_preview_dialog(self, file_info):
-        """Show preview dialog for current file in queue."""
-        file_path = file_info['file_path']
+    def _show_unified_queue_preview(self, file_info):
+        """Show preview using unified FilePreviewDialog with queue context."""
+        # Prepare queue context for the dialog
+        queue_info = self.file_queue.get_current_file_info()
+        queue_context = {
+            'auto_tag': file_info['auto_tag'],
+            'skip_rows': file_info['skip_rows'],
+            'current_index': queue_info['current_index'],
+            'total_files': queue_info['total_files'],
+            'processed_count': queue_info['processed_count'],
+            'failed_count': queue_info['failed_count'],
+            'skipped_count': queue_info['skipped_count'],
+            'skip_callback': self._on_queue_skip,
+            'cancel_callback': self._cancel_queue_processing
+        }
         
-        # Try to preview the file
-        temp_processor = ParticleDataProcessor()
-        preview_data = temp_processor.preview_csv(file_path, preview_rows=15)
+        # Create and show the unified preview dialog
+        preview_dialog = FilePreviewDialog(
+            parent=self.root, 
+            file_path=file_info['file_path'], 
+            on_load_callback=self._handle_queue_file_load,
+            mode='verification',  #Specify verification mode
+            queue_context=queue_context  #Pass queue context
+        )
+        preview_dialog.show()
+
         
-        if not preview_data['success']:
-            # Can't preview - skip this file
-            error_msg = f"Cannot preview file: {preview_data.get('error', 'Unknown error')}"
-            self.file_queue.mark_current_failed(error_msg)
-            
-            # Ask user if they want to continue
-            result = messagebox.askyesno(
-                "Preview Failed", 
-                f"Failed to preview {file_info['filename']}:\n{error_msg}\n\n"
-                f"Skip this file and continue with queue?"
-            )
-            
-            if result:
-                self._process_current_queue_file()  # Process next file
-            else:
-                self._cancel_queue_processing()
-            return
-        
-        # Show the enhanced preview dialog
-        self._show_enhanced_queue_preview_dialog(preview_data, file_info)
+        # Enhanced keyboard shortcuts for queue preview
+        preview_dialog.bind('<Return>', lambda e: load_current_file())
+        preview_dialog.bind('<Escape>', lambda e: cancel_queue())
+        preview_dialog.bind('<Control-s>', lambda e: skip_current_file())  # Ctrl+S to skip
+        preview_dialog.bind('<Control-r>', lambda e: self._refresh_current_queue_preview())
 
-    def _show_enhanced_queue_preview_dialog(self, preview_data, file_info):
-            """Show enhanced preview dialog for queue processing."""
-            # Create the dialog window 
-            preview_window = tk.Toplevel(self.root)
-            preview_window.title(f"Queue Preview - {file_info['filename']}")
-            preview_window.geometry("950x800")
-            preview_window.grab_set()  # Make it modal
-            
-            # Queue progress header
-            queue_info = self.file_queue.get_current_file_info()
-            progress_frame = ttk.LabelFrame(preview_window, text="Queue Progress", padding=5)
-            progress_frame.pack(fill='x', padx=10, pady=5)
-            
-            progress_text = f"File {queue_info['current_index'] + 1} of {queue_info['total_files']}"
-            if queue_info['processed_count'] > 0:
-                progress_text += f" | Processed: {queue_info['processed_count']}"
-            if queue_info['failed_count'] > 0:
-                progress_text += f" | Failed: {queue_info['failed_count']}"
-            if queue_info['skipped_count'] > 0:
-                progress_text += f" | Skipped: {queue_info['skipped_count']}"
-            
-            ttk.Label(progress_frame, text=progress_text, font=FONT_PROGRESS).pack(anchor='w')
-            
-            # File info header (NO TAG EDITING HERE - moved to filtering section)
-            info_frame = ttk.LabelFrame(preview_window, text="Current File Information", padding=5)
-            info_frame.pack(fill='x', padx=10, pady=5)
-            
-            ttk.Label(info_frame, text=f"File: {file_info['filename']}", font=FONT_FILE_NAME).pack(anchor='w')
-            ttk.Label(info_frame, text=f"Total lines: {preview_data['total_lines']}").pack(anchor='w')
-            ttk.Label(info_frame, text=f"Detected columns: {preview_data['detected_columns']}").pack(anchor='w')
 
-            instrument_type = preview_data.get('instrument_type', 'Unknown')
-            instrument_color = 'green' if instrument_type != 'Unknown' else 'orange'
-            instrument_label = ttk.Label(
-                info_frame,
-                text=f"Instrument Type: {instrument_type}",
-                font=FONT_INSTRUMENT_TYPE,
-                foreground=instrument_color
-            )
-            instrument_label.pack(anchor='w')
-
-            # Preview text section
-            preview_section = ttk.LabelFrame(preview_window, text="File Preview", padding=5)
-            preview_section.pack(fill='both', expand=True, padx=10, pady=5)
-            
-            preview_text = tk.Text(preview_section, wrap='none', font=FONT_PREVIEW_TEXT, height=15)
-            scrollbar = ttk.Scrollbar(preview_section, orient='vertical', command=preview_text.yview)
-            preview_text.configure(yscrollcommand=scrollbar.set)
-            
-            preview_text.pack(side='left', fill='both', expand=True)
-            scrollbar.pack(side='right', fill='y')
-            
-            # Add preview content
-            for i, line in enumerate(preview_data['preview_lines']):
-                preview_text.insert(tk.END, f"{i:3d}: {line}\n")
-            preview_text.config(state='disabled')
-            
-            # Filter controls section 
-            filter_frame = ttk.LabelFrame(preview_window, text="Data Filtering Options", padding=10)
-            filter_frame.pack(fill='x', padx=10, pady=5)
-            
-            # Create filter_row container like in single-file dialog
-            filter_row = ttk.Frame(filter_frame)
-            filter_row.pack(fill='x')
-            
-            # Tag editing with float validation
-            ttk.Label(filter_row, text="Bead Size (μm):").grid(row=0, column=0, sticky='w', padx=(0,5))
-            tag_var = tk.StringVar(value=file_info['auto_tag'])
-            
-            # Register validation function for this dialog
-            validate_float = preview_window.register(self._validate_float_input_for_dialog)
-            
-            tag_entry = ttk.Entry(
-                filter_row, 
-                textvariable=tag_var, 
-                width=30,
-                validate='key',
-                validatecommand=(validate_float, '%P')
-            )
-            tag_entry.grid(row=0, column=1, sticky='w', padx=5)
-            
-            # Skip rows control
-            ttk.Label(filter_row, text="Skip rows from top:").grid(row=1, column=0, sticky='w', pady=(10,0), padx=(0,5))
-            skip_var = tk.IntVar(value=file_info['skip_rows'])
-            skip_entry = ttk.Entry(filter_row, textvariable=skip_var, width=6)
-            skip_entry.grid(row=1, column=1, sticky='w', padx=5, pady=(10,0))
-            
-            # Add hint text like in single-file dialog
-            skip_hint_label = ttk.Label(
-                filter_row, 
-                text="(Use this to skip headers, metadata, or junk data)", 
-                font=FONT_HINT_TEXT
-            )
-            skip_hint_label.grid(row=1, column=2, sticky='w', padx=(10,0), pady=(10,0))
-            
-            # Enhanced keyboard shortcuts for queue preview
-            preview_window.bind('<Return>', lambda e: load_current_file())
-            preview_window.bind('<Escape>', lambda e: cancel_queue())
-            preview_window.bind('<Control-s>', lambda e: skip_current_file())  # Ctrl+S to skip
-            preview_window.bind('<Control-r>', lambda e: self._refresh_current_queue_preview())
-            
-            # Tab navigation
-            tag_entry.bind('<Tab>', lambda e: skip_entry.focus_set())
-            skip_entry.bind('<Tab>', lambda e: preview_window.focus_set())
-
-            # Buttons
-            button_frame = ttk.Frame(preview_window)
-            button_frame.pack(fill='x', padx=10, pady=10)
-            
-            def load_current_file():
-                try:
-                    skip_rows = skip_var.get()
-                    if skip_rows < 0:
-                        skip_rows = 0
-                    
-                    tag_str = tag_var.get().strip()
-                    if not tag_str:
-                        messagebox.showerror("Error", "Please enter a numeric bead size value.")
-                        return
-                    
-                    # Validate float
-                    try:
-                        tag_float = float(tag_str)
-                        normalized_tag = str(tag_float)
-                    except ValueError:
-                        messagebox.showerror("Error", "Bead size must be a valid number (e.g., 1.5, -2.0, 42)")
-                        return
-                    
-                    # Update file queue with settings
-                    self.file_queue.update_current_file(
-                        skip_rows=skip_rows,
-                        auto_tag=normalized_tag
-                    )
-                    
-                    preview_window.destroy()
-                    self._load_current_queue_file(file_info['file_path'], normalized_tag, skip_rows)
-                    
-                except tk.TclError:
-                    messagebox.showerror("Error", "Please enter a valid number for rows to skip.")
-            
-            def skip_current_file():
-                self.file_queue.skip_current_file("User skipped during preview")
-                preview_window.destroy()
-                self._process_current_queue_file()
-            
-            def cancel_queue():
-                preview_window.destroy()
-                self._cancel_queue_processing()
-            
-            ttk.Button(button_frame, text="📁 Load This File", command=load_current_file).pack(side='left', padx=5)
-            ttk.Button(button_frame, text="⏭️ Skip This File", command=skip_current_file).pack(side='left', padx=5)
-            ttk.Button(button_frame, text="❌ Cancel Queue", command=cancel_queue).pack(side='left', padx=5)
-            
-            tag_entry.focus_set()
-            tag_entry.select_range(0, tk.END)
-
-    def _load_current_queue_file(self, file_path, dataset_tag, skip_rows):
-        """Load the current queue file as a dataset."""
+    def _handle_queue_file_load(self, file_path: str, tag: str, skip_rows: int):
+        """Handle queue file loading (simplified using unified dialog)."""
         try:
             dataset_id = self.dataset_manager.add_dataset(
                 file_path=file_path,
-                tag=dataset_tag,
+                tag=tag,
                 notes="",
                 skip_rows=skip_rows
             )
@@ -1072,14 +926,14 @@ class MainWindow:
                 # Update scroll region after adding dataset
                 self.scrollable_frame.update_scroll_region()
                 
-                logger.info(f"Successfully loaded queue file: {dataset_tag}")
-                self._process_current_queue_file()
+                logger.info(f"Successfully loaded queue file: {tag}")
+                self._process_current_queue_file()  # Continue with next file
                 
             else:
                 self.file_queue.mark_current_failed("Failed to load file into dataset manager")
                 result = messagebox.askyesno(
                     "Load Failed", 
-                    f"Failed to load {dataset_tag}.\n\nContinue with remaining files?"
+                    f"Failed to load {tag}.\n\nContinue with remaining files?"
                 )
                 
                 if result:
@@ -1093,13 +947,18 @@ class MainWindow:
             
             result = messagebox.askyesno(
                 "Load Error", 
-                f"Error loading {dataset_tag}:\n{error_msg}\n\nContinue with remaining files?"
+                f"Error loading {tag}:\n{error_msg}\n\nContinue with remaining files?"
             )
             
             if result:
                 self._process_current_queue_file()
             else:
                 self._cancel_queue_processing()
+
+    def _on_queue_skip(self):
+        """Handle skip button in queue processing."""
+        self.file_queue.skip_current_file("User skipped during preview")
+        self._process_current_queue_file()
 
     def _finish_queue_processing(self):
         """Finish queue processing and show summary."""
@@ -1293,7 +1152,7 @@ class MainWindow:
                     self.dataset_manager.set_active_dataset(selected_dataset['id'])
                     
                     self._load_active_dataset_settings()
-                    self._update_tag_editor()
+                    self._update_tag_editor()  # Update tag editor when selection changes
                     self._update_column_combos()
                     self._update_stats_display()
                     
@@ -1597,7 +1456,7 @@ class MainWindow:
         help_text.pack(side='left', fill='both', expand=True)
         scrollbar.pack(side='right', fill='y')
         
-        # Help content (placeholder for now)
+        # Help content
         help_content = """DATASET MANAGEMENT OVERVIEW
 
 This section helps you manage multiple datasets in the Particle Data Analyzer.
@@ -1605,8 +1464,15 @@ This section helps you manage multiple datasets in the Particle Data Analyzer.
 LOADING DATA:
 • Use "Load for Calibration" for single file analysis
 • Use "Load for Verification" for multiple file comparison
-• The file preview dialog lets you set bead size and skip header rows
+• The enhanced file preview dialog now includes dynamic preview line controls
+• Preview lines automatically adjust based on detected instrument type
 • Each dataset gets a unique color and appears in the "Loaded Datasets" list
+
+PREVIEW ENHANCEMENTS:
+• Preview line controls work in both Calibration and Verification modes
+• Instrument-aware defaults
+• Real-time instrument type detection and hints
+• Refresh preview button updates content and re-detects instrument type
 
 DATASET LIST:
 • Shows all loaded datasets with bead size and filename
@@ -1635,13 +1501,14 @@ DATA TYPES:
 • Raw Measurements: Individual size measurements only
 
 TIPS:
+• Preview lines automatically set based on instrument type
 • Use meaningful bead sizes to identify your datasets
 • Add notes to remember important details about each dataset
 • In Verification mode, you can compare multiple datasets
 • The plot updates automatically when you switch datasets
 
 KEYBOARD SHORTCUTS:
-• Enter: Save bead size changes
+• Enter: Save bead size changes or refresh preview
 • Escape: Close dialogs
 
 For more detailed help, please refer to the user manual or contact support."""
@@ -1724,7 +1591,7 @@ For more detailed help, please refer to the user manual or contact support."""
                 plt.close(self.current_figure)
                 self.current_figure = None
             
-                            # Show the no plot message again
+            # Show the no plot message again
             if not hasattr(self, 'no_plot_label') or not self.no_plot_label.winfo_exists():
                 plot_content_frame = ttk.Frame(self.plot_frame)
                 plot_content_frame.pack(fill='both', expand=True)
@@ -1777,13 +1644,12 @@ For more detailed help, please refer to the user manual or contact support."""
             'bin_count': self.bin_count_var.get(),
             'size_column': self.size_column_var.get(),
             'frequency_column': self.frequency_column_var.get(),
-            'show_stats_lines': self.show_stats_lines_var.get()
+            'show_stats_lines': self.show_stats_lines_var.get(),
+            'show_gaussian_fit': self.show_gaussian_fit_var.get()
         }
-        settings['show_gaussian_fit'] = self.show_gaussian_fit_var.get()
 
         self.dataset_manager.update_analysis_settings(active_dataset['id'], settings)
     
-    # === DATA PROCESSING AND PLOTTING METHODS ===
     
     def _on_data_mode_change(self):
         """Handle data mode change (pre-aggregated vs raw measurements)."""
@@ -1911,33 +1777,6 @@ For more detailed help, please refer to the user manual or contact support."""
                     stats_str += f"  Mean: {stats['frequency_mean']:.2f}\n"
         
         self.stats_text.insert(1.0, stats_str)
-    
-    def _on_bin_scale_move(self, value):
-        """Handle bin count scale movement - convert to int and update display only."""
-        # Convert float value to integer and update the IntVar
-        bin_count = int(float(value))
-        self.bin_count_var.set(bin_count)
-    
-    def _on_bin_scale_release(self, event):
-        """Handle bin count scale release - triggers plot update."""
-        # Ensure we have an integer value
-        bin_count = int(self.bin_count_var.get())
-        self.bin_count_var.set(bin_count)  # Force integer update
-        
-        # Validate and constrain the value
-        if bin_count < MIN_BIN_COUNT:
-            bin_count = MIN_BIN_COUNT
-            self.bin_count_var.set(bin_count)
-        elif bin_count > MAX_BIN_COUNT:
-            bin_count = MAX_BIN_COUNT  
-            self.bin_count_var.set(bin_count)
-        
-        # Save settings
-        self._save_active_dataset_settings()
-        
-        # Update plot if we have data
-        if hasattr(self, 'canvas') and self.dataset_manager.get_active_dataset():
-            self._update_plot()
     
     def _on_bin_entry_change(self, event):
         """Handle bin count entry field changes."""
@@ -2125,10 +1964,6 @@ For more detailed help, please refer to the user manual or contact support."""
         
         return False
 
-    def _validate_float_input_for_dialog(self, value_if_allowed):
-        """Validate float input for dialog contexts (same as main validation)."""
-        return self._validate_float_input(value_if_allowed)
-
     def generate_report(self):
         """Generate a PDF report with current analysis."""
         if not REPORTS_AVAILABLE:
@@ -2205,7 +2040,6 @@ For more detailed help, please refer to the user manual or contact support."""
     
     def _get_current_timestamp(self):
         """Get current timestamp for report."""
-        from datetime import datetime
         return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     def _update_report_button_state(self):
@@ -2463,31 +2297,4 @@ For more detailed help, please refer to the user manual or contact support."""
         except Exception as e:
             logger.error(f"Error during cleanup: {e}")
             # Force exit if cleanup fails
-            import sys
             sys.exit(0)
-        
-    def debug_orders_comparison(self):
-        """Debug method to compare treeview order vs manager order."""
-        print("\n=== ORDER COMPARISON DEBUG ===")
-        
-        # Get treeview order
-        treeview_items = list(self.dataset_treeview.get_children())
-        all_datasets = self.dataset_manager.get_all_datasets()
-        
-        print("TREEVIEW ORDER:")
-        for i, item in enumerate(treeview_items):
-            values = self.dataset_treeview.item(item, 'values')
-            if values:
-                tag, filename = values
-                print(f"  {i}: {tag} - {filename}")
-        
-        print("\nMANAGER ORDER:")
-        manager_datasets = self.dataset_manager.get_all_datasets()
-        for i, dataset in enumerate(manager_datasets):
-            print(f"  {i}: {dataset['tag']} - {dataset['filename']}")
-        
-        print("\nMANAGER INTERNAL DICT ORDER:")
-        for i, (id, dataset) in enumerate(self.dataset_manager.datasets.items()):
-            print(f"  {i}: {id[:8]}... -> {dataset['tag']} - {dataset['filename']}")
-        
-        print("===============================\n")
