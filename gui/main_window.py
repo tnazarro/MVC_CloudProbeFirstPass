@@ -1950,7 +1950,6 @@ For more detailed help, please refer to the user manual or contact support."""
     
     def _get_current_timestamp(self):
         """Get current timestamp for report."""
-        from datetime import datetime
         return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     def _update_report_button_state(self):
