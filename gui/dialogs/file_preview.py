@@ -388,13 +388,10 @@ class FilePreviewDialog:
         # Mode-aware buttons layout
         self.button_frame.pack(fill='x', padx=10, pady=10)
         
-        if self.mode == 'calibration':
-            self.load_button.pack(side='left', padx=5)
-            self.cancel_button.pack(side='left', padx=5)
-        else:  # verification mode
-            self.load_button.pack(side='left', padx=5)
+        self.load_button.pack(side='left', padx=5)
+        if self.mode == 'verification':
             self.skip_button.pack(side='left', padx=5)
-            self.cancel_button.pack(side='left', padx=5)
+        self.cancel_button.pack(side='left', padx=5)
         
     def _populate_initial_data(self) -> None:
         """Populate the dialog with initial preview data."""
