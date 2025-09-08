@@ -1050,7 +1050,7 @@ class MainWindow:
         """Navigate to previous dataset with UI updates."""
         if self.dataset_manager.get_dataset_count() > 1:
             prev_id = self.dataset_manager.get_previous_dataset_id()
-            if prev_id:
+            if prev_id is not None:
                 self.dataset_manager.set_active_dataset(prev_id)
                 self._load_active_dataset_settings()
                 self._update_dataset_ui()
@@ -1065,7 +1065,7 @@ class MainWindow:
         """Navigate to next dataset with UI updates."""
         if self.dataset_manager.get_dataset_count() > 1:
             next_id = self.dataset_manager.get_next_dataset_id()
-            if next_id:
+            if next_id is not None:
                 self.dataset_manager.set_active_dataset(next_id)
                 self._load_active_dataset_settings()
                 self._update_dataset_ui()
