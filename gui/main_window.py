@@ -656,7 +656,6 @@ class MainWindow:
         
         self._updating_tag = False
     
-    
     def _on_analysis_mode_change(self):
         """This method is no longer called by radio buttons, but kept for internal mode changes."""
         mode = self.analysis_mode_var.get()
@@ -895,11 +894,9 @@ class MainWindow:
 
         
         # Enhanced keyboard shortcuts for queue preview
-        preview_dialog.bind('<Return>', lambda e: load_current_file())
-        preview_dialog.bind('<Escape>', lambda e: cancel_queue())
-        preview_dialog.bind('<Control-s>', lambda e: skip_current_file())  # Ctrl+S to skip
-        preview_dialog.bind('<Control-r>', lambda e: self._refresh_current_queue_preview())
-
+        preview_dialog.parent.bind('<Return>', lambda e: self._handle_queue_file_load())
+        preview_dialog.parent.bind('<Escape>', lambda e: self._cancel_queue_processing(self))
+        preview_dialog.parent.bind('<Control-s>', lambda e: self._on_queue_skip(self))  # Ctrl+S to skip
 
     def _handle_queue_file_load(self, file_path: str, tag: str, skip_rows: int):
         """Handle queue file loading (simplified using unified dialog)."""
