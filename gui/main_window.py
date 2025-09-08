@@ -1077,7 +1077,7 @@ class MainWindow:
                     self._update_plot()
 
 
-    # === UPDATED DATASET MANAGEMENT METHODS ===
+    # === DATASET MANAGEMENT METHODS ===
     
     def _update_dataset_ui(self):
         """Update all dataset-related UI elements."""

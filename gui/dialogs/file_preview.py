@@ -399,7 +399,7 @@ class FilePreviewDialog:
             self._update_preview_text(self.preview_data['preview_lines'])
         
     def _setup_event_handlers(self) -> None:
-        """Setup event handlers for the dialog."""
+        """Setup event handlers."""
         # Enhanced keyboard shortcuts
         self.dialog.bind('<Control-r>', lambda e: self._refresh_preview())
         self.dialog.bind('<Return>', self._handle_enter_key)
