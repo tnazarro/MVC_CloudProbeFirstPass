@@ -28,4 +28,4 @@ def main():
         logger.info("Application closed")
 
 if __name__ == "__main__":
-    main()
+    main() 
