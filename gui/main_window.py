@@ -334,42 +334,43 @@ class MainWindow:
         # === DATA ANALYSIS CONTROLS ===
         ttk.Separator(self.control_frame, orient='horizontal').grid(row=6, column=0, columnspan=3, sticky='ew', pady=5)
         
-        # Data mode selection
-        ttk.Label(self.control_frame, text="Data Type:").grid(row=7, column=0, sticky='w', pady=2)
+        #Commenting out data mode selection; default to raw measurements
+        # # Data mode selection
+        # ttk.Label(self.control_frame, text="Data Type:").grid(row=7, column=0, sticky='w', pady=2)
         
-        data_mode_frame = ttk.Frame(self.control_frame)
-        data_mode_frame.grid(row=7, column=1, columnspan=2, sticky='ew', pady=2)
+        # data_mode_frame = ttk.Frame(self.control_frame)
+        # data_mode_frame.grid(row=7, column=1, columnspan=2, sticky='ew', pady=2)
         
-        self.pre_agg_radio = ttk.Radiobutton(data_mode_frame, text="Pre-aggregated (Size + Frequency)", 
-                                           variable=self.data_mode_var, value='pre_aggregated',
-                                           command=self._on_data_mode_change)
-        self.pre_agg_radio.grid(row=0, column=0, sticky='w')
+        # self.pre_agg_radio = ttk.Radiobutton(data_mode_frame, text="Pre-aggregated (Size + Frequency)", 
+        #                                    variable=self.data_mode_var, value='pre_aggregated',
+        #                                    command=self._on_data_mode_change)
+        # self.pre_agg_radio.grid(row=0, column=0, sticky='w')
         
-        self.raw_radio = ttk.Radiobutton(data_mode_frame, text="Raw Measurements (Size only)", 
-                                       variable=self.data_mode_var, value='raw_measurements',
-                                       command=self._on_data_mode_change)
-        self.raw_radio.grid(row=1, column=0, sticky='w')
+        # self.raw_radio = ttk.Radiobutton(data_mode_frame, text="Raw Measurements (Size only)", 
+        #                                variable=self.data_mode_var, value='raw_measurements',
+        #                                command=self._on_data_mode_change)
+        # self.raw_radio.grid(row=1, column=0, sticky='w')
         
         #Column selection
-        ttk.Label(self.control_frame, text="Size Column:").grid(row=8, column=0, sticky='w', pady=2)
+        ttk.Label(self.control_frame, text="Size Column:").grid(row=7, column=0, sticky='w', pady=2)
         self.size_combo = ttk.Combobox(self.control_frame, textvariable=self.size_column_var, 
                                     state='readonly')
-        self.size_combo.grid(row=8, column=1, sticky='ew', pady=2)
+        self.size_combo.grid(row=7, column=1, sticky='ew', pady=2)
         self.size_combo.bind('<<ComboboxSelected>>', self._on_column_change)
 
         self.frequency_label = ttk.Label(self.control_frame, text="Frequency Column:")
-        self.frequency_label.grid(row=9, column=0, sticky='w', pady=2)
+        self.frequency_label.grid(row=7, column=0, sticky='w', pady=2)
         self.frequency_combo = ttk.Combobox(self.control_frame, textvariable=self.frequency_column_var, 
                                         state='readonly')
-        self.frequency_combo.grid(row=9, column=1, sticky='ew', pady=2)
+        self.frequency_combo.grid(row=7, column=1, sticky='ew', pady=2)
         self.frequency_combo.bind('<<ComboboxSelected>>', self._on_column_change)
 
         # Bin count control
-        ttk.Label(self.control_frame, text="Bins:").grid(row=10, column=0, sticky='w', pady=2)
+        ttk.Label(self.control_frame, text="Bins:").grid(row=8, column=0, sticky='w', pady=2)
 
         # Create frame for bin controls
         bin_frame = ttk.Frame(self.control_frame)
-        bin_frame.grid(row=10, column=1, columnspan=2, sticky='ew', pady=2)
+        bin_frame.grid(row=8, column=1, columnspan=2, sticky='ew', pady=2)
 
         # Bin count entry field only (remove slider)
         self.bin_entry = ttk.Entry(bin_frame, textvariable=self.bin_count_var, width=8)
@@ -412,17 +413,17 @@ class MainWindow:
             state='disabled',
             width=10
         )
-        self.gaussian_info_btn.grid(row=11, column=2, sticky='w', padx=(10,0), pady=2)
+        self.gaussian_info_btn.grid(row=9, column=2, sticky='w', padx=(10,0), pady=2)
 
         # Plot button (all row numbers updated)
         self.plot_button = ttk.Button(self.control_frame, text="Create Plot", 
                                      command=self.create_plot, state='disabled')
-        self.plot_button.grid(row=12, column=0, columnspan=2, sticky='ew', pady=10)
+        self.plot_button.grid(row=10, column=0, columnspan=2, sticky='ew', pady=10)
         
         # Report generation button - will be mode-restricted
         self.report_button = ttk.Button(self.control_frame, text="Generate Report", 
                                        command=self.generate_report, state='disabled')
-        self.report_button.grid(row=13, column=0, columnspan=2, sticky='ew', pady=5)
+        self.report_button.grid(row=11, column=0, columnspan=2, sticky='ew', pady=5)
         
         # Show/hide report button based on availability
         if not REPORTS_AVAILABLE:
