@@ -1000,55 +1000,61 @@ class MainWindow:
 
     def _setup_keyboard_shortcuts(self):
         """Setup keyboard shortcuts for the main window."""
-        # Bind to root window so shortcuts work globally when main window has focus
-        self.root.bind('<Key>', self._handle_global_keypress)
+        # File loading shortcuts - these work perfectly with compound keys
+        self.root.bind('<Control-o>', lambda e: self._load_for_calibration())
+        self.root.bind('<Control-Shift-O>', lambda e: self._load_for_verification())
+        
+        # Plot creation shortcuts
+        self.root.bind('<Return>', self._handle_return_key)
+        self.root.bind('<space>', self._handle_space_key)
+        
+        # Dataset navigation shortcuts
+        self.root.bind('<Up>', lambda e: self._navigate_dataset_previous())
+        self.root.bind('<Down>', lambda e: self._navigate_dataset_next())
+        self.root.bind('<Left>', lambda e: self._navigate_dataset_previous())
+        self.root.bind('<Right>', lambda e: self._navigate_dataset_next())
         
         # Make sure the main window can receive focus for keyboard events
         self.root.focus_set()
 
-    def _handle_global_keypress(self, event):
-        """Handle global keyboard shortcuts."""
-        key = event.keysym.lower()
-        state = event.state
-
-        # Check for Ctrl key combinations
-        ctrl_pressed = (state & 0x4) != 0  # Ctrl key mask
-        shift_pressed = (state & 0x1) != 0  # Shift key mask
-                
-        # File loading shortcuts
-        if ctrl_pressed and key == 'o':
-            if shift_pressed:
-                # Ctrl+Shift+O: Load multiple files
-                self._load_for_verification()
-            else:
-                # Ctrl+O: Load single file
-                self._load_for_calibration()
+    def _handle_return_key(self, event):
+        """Handle Return key - only create plot if not in text widget."""
+        focused_widget = self.root.focus_get()
+        if not self._is_text_input_widget(focused_widget):
+            if self.plot_button['state'] == 'normal':
+                self.create_plot()
             return 'break'
-        
-        # Only process dataset navigation if we have datasets loaded
-        if not self.dataset_manager.has_datasets():
-            return
-        
-        # Enter or Space to create/update plot (when not in an entry widget)
-        if key in ['return', 'space']:
-            # Check if focus is on an entry widget to avoid conflicts
-            focused_widget = self.root.focus_get()
-            if not isinstance(focused_widget, (tk.Entry, tk.Text)):
-                if self.plot_button['state'] == 'normal':
-                    self.create_plot()
-                return 'break'
 
-        # Arrow key navigation between datasets
-        if key in ['up', 'left']:
-            self._navigate_dataset_previous()
-            return 'break'  # Prevent default behavior
-        elif key in ['down', 'right']:
-            self._navigate_dataset_next()
+    def _handle_space_key(self, event):
+        """Handle Space key - only create plot if not in text widget."""
+        focused_widget = self.root.focus_get()
+        if not self._is_text_input_widget(focused_widget):
+            if self.plot_button['state'] == 'normal':
+                self.create_plot()
             return 'break'
+
+    def _is_text_input_widget(self, widget):
+        """Check if widget is a text input that should handle keys normally."""
+        if widget is None:
+            return False
+        
+        # Check for common text input widgets
+        if isinstance(widget, (tk.Entry, tk.Text)):
+            return True
+        
+        # Check for ttk widgets
+        try:
+            import tkinter.ttk as ttk
+            if isinstance(widget, (ttk.Entry, ttk.Combobox)):
+                return True
+        except ImportError:
+            pass
+        
+        return False
 
     def _navigate_dataset_previous(self):
-        """Navigate to previous dataset with UI updates."""
-        if self.dataset_manager.get_dataset_count() > 1:
+        """Navigate to previous dataset if datasets are loaded."""
+        if self.dataset_manager.has_datasets() and self.dataset_manager.get_dataset_count() > 1:
             prev_id = self.dataset_manager.get_previous_dataset_id()
             if prev_id is not None:
                 self.dataset_manager.set_active_dataset(prev_id)
@@ -1062,8 +1068,8 @@ class MainWindow:
                     self._update_plot()
 
     def _navigate_dataset_next(self):
-        """Navigate to next dataset with UI updates."""
-        if self.dataset_manager.get_dataset_count() > 1:
+        """Navigate to next dataset if datasets are loaded."""
+        if self.dataset_manager.has_datasets() and self.dataset_manager.get_dataset_count() > 1:
             next_id = self.dataset_manager.get_next_dataset_id()
             if next_id is not None:
                 self.dataset_manager.set_active_dataset(next_id)
