@@ -175,6 +175,7 @@ class MainWindow:
         self._update_data_mode_ui()
         self._update_dataset_ui()
         self._update_analysis_mode_ui()
+        self._setup_keyboard_shortcuts()
     
     def _create_widgets(self):
         """Create all GUI widgets."""
@@ -658,7 +659,6 @@ class MainWindow:
         
         self._updating_tag = False
     
-    
     def _on_analysis_mode_change(self):
         """This method is no longer called by radio buttons, but kept for internal mode changes."""
         mode = self.analysis_mode_var.get()
@@ -895,6 +895,12 @@ class MainWindow:
         )
         preview_dialog.show()
 
+        
+        # Enhanced keyboard shortcuts for queue preview
+        preview_dialog.parent.bind('<Return>', lambda e: self._handle_queue_file_load())
+        preview_dialog.parent.bind('<Escape>', lambda e: self._cancel_queue_processing(self))
+        preview_dialog.parent.bind('<Control-s>', lambda e: self._on_queue_skip(self))  # Ctrl+S to skip
+
     def _handle_queue_file_load(self, file_path: str, tag: str, skip_rows: int):
         """Handle queue file loading (simplified using unified dialog)."""
         try:
@@ -992,6 +998,85 @@ class MainWindow:
             self.queue_status_label.config(text=status_text)
         else:
             self.queue_status_label.config(text=f"Queue ready: {info['total_files']} files")
+    
+    # === KEYBOARD SHORTCUTS ===
+
+    def _setup_keyboard_shortcuts(self):
+        """Setup keyboard shortcuts for the main window."""
+        # File loading shortcuts - these work perfectly with compound keys
+        self.root.bind('<Control-o>', lambda e: self._load_for_calibration())
+        self.root.bind('<Control-Shift-O>', lambda e: self._load_for_verification())
+        
+        # Plot creation shortcuts
+        self.root.bind('<Return>', self._handle_return_key)
+        self.root.bind('<space>', self._handle_space_key)
+        
+        # Dataset navigation shortcuts
+        self.root.bind('<Up>', lambda e: self._navigate_dataset_previous())
+        self.root.bind('<Down>', lambda e: self._navigate_dataset_next())
+        self.root.bind('<Left>', lambda e: self._navigate_dataset_previous())
+        self.root.bind('<Right>', lambda e: self._navigate_dataset_next())
+        
+        # Make sure the main window can receive focus for keyboard events
+        self.root.focus_set()
+
+    def _handle_return_key(self, event):
+        """Handle Return key - only create plot if not in text widget."""
+        focused_widget = self.root.focus_get()
+        if not self._is_text_input_widget(focused_widget):
+            if self.plot_button['state'] == 'normal':
+                self.create_plot()
+            return 'break'
+
+    def _handle_space_key(self, event):
+        """Handle Space key - only create plot if not in text widget."""
+        focused_widget = self.root.focus_get()
+        if not self._is_text_input_widget(focused_widget):
+            if self.plot_button['state'] == 'normal':
+                self.create_plot()
+            return 'break'
+
+    def _is_text_input_widget(self, widget):
+        """Check if widget is a text input that should handle keys normally."""
+        if widget is None:
+            return False
+        
+        # Check for common text input widgets
+        if isinstance(widget, (tk.Entry, tk.Text, ttk.Entry, ttk.Combobox)):
+            return True
+        
+        return False
+
+    def _navigate_dataset_previous(self):
+        """Navigate to previous dataset if datasets are loaded."""
+        if self.dataset_manager.has_datasets() and self.dataset_manager.get_dataset_count() > 1:
+            prev_id = self.dataset_manager.get_previous_dataset_id()
+            if prev_id is not None:
+                self.dataset_manager.set_active_dataset(prev_id)
+                self._load_active_dataset_settings()
+                self._update_dataset_ui()
+                self._update_column_combos()
+                self._update_stats_display()
+                
+                # Auto-update plot if one exists
+                if hasattr(self, 'canvas'):
+                    self._update_plot()
+
+    def _navigate_dataset_next(self):
+        """Navigate to next dataset if datasets are loaded."""
+        if self.dataset_manager.has_datasets() and self.dataset_manager.get_dataset_count() > 1:
+            next_id = self.dataset_manager.get_next_dataset_id()
+            if next_id is not None:
+                self.dataset_manager.set_active_dataset(next_id)
+                self._load_active_dataset_settings()
+                self._update_dataset_ui()
+                self._update_column_combos()
+                self._update_stats_display()
+                
+                # Auto-update plot if one exists
+                if hasattr(self, 'canvas'):
+                    self._update_plot()
+
 
     # === DATASET MANAGEMENT METHODS ===
     

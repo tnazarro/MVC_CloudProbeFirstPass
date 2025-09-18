@@ -400,15 +400,32 @@ class FilePreviewDialog:
         
     def _setup_event_handlers(self) -> None:
         """Setup event handlers."""
-        # Allow Enter key to refresh preview
-        self.preview_lines_entry.bind('<Return>', lambda e: self._refresh_preview())
+        # Enhanced keyboard shortcuts
+        self.dialog.bind('<Control-r>', lambda e: self._refresh_preview())
+        self.dialog.bind('<Return>', self._handle_enter_key)
+        self.dialog.bind('<Escape>', lambda e: self._on_cancel())
+        
+        # Tab navigation between key fields
+        self.preview_lines_entry.bind('<Tab>', lambda e: self.tag_entry.focus_set())
+        self.tag_entry.bind('<Tab>', lambda e: self.skip_entry.focus_set())
+        self.skip_entry.bind('<Tab>', lambda e: self.load_button.focus_set())
         
         # Focus on tag entry for immediate editing
         self.tag_entry.focus_set()
         self.tag_entry.select_range(0, tk.END)
         
-        # Escape key to cancel
-        self.dialog.bind('<Escape>', lambda e: self._on_cancel())
+    def _handle_enter_key(self, event):
+        """Handle Enter key - load if not in preview lines entry."""
+        focused_widget = self.dialog.focus_get()
+        
+        # If focus is on preview lines entry, refresh instead of loading
+        if focused_widget == self.preview_lines_entry:
+            self._refresh_preview()
+        else:
+            # Otherwise, load the file
+            self._on_load()
+        
+        return 'break'
         
     def _update_preview_text(self, preview_lines: list) -> None:
         """Update the preview text widget with new content."""
