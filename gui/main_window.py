@@ -1039,16 +1039,8 @@ class MainWindow:
             return False
         
         # Check for common text input widgets
-        if isinstance(widget, (tk.Entry, tk.Text)):
+        if isinstance(widget, (tk.Entry, tk.Text, ttk.Entry, ttk.Combobox)):
             return True
-        
-        # Check for ttk widgets
-        try:
-            import tkinter.ttk as ttk
-            if isinstance(widget, (ttk.Entry, ttk.Combobox)):
-                return True
-        except ImportError:
-            pass
         
         return False
 
