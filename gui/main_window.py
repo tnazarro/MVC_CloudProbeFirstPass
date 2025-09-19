@@ -140,7 +140,7 @@ class MainWindow:
         self.bin_count_var = tk.IntVar(value=DEFAULT_BIN_COUNT)
         self.size_column_var = tk.StringVar()
         self.frequency_column_var = tk.StringVar()
-        self.show_stats_lines_var = tk.BooleanVar(value=True)
+        self.show_stats_lines_var = tk.BooleanVar(value=False)
         self.data_mode_var = tk.StringVar(value='raw_measurements')  # 'pre_aggregated' or 'raw_measurements'
         self.skip_rows_var = tk.IntVar(value=0)
         
@@ -335,42 +335,26 @@ class MainWindow:
         # === DATA ANALYSIS CONTROLS ===
         ttk.Separator(self.control_frame, orient='horizontal').grid(row=6, column=0, columnspan=3, sticky='ew', pady=5)
         
-        # Data mode selection
-        ttk.Label(self.control_frame, text="Data Type:").grid(row=7, column=0, sticky='w', pady=2)
-        
-        data_mode_frame = ttk.Frame(self.control_frame)
-        data_mode_frame.grid(row=7, column=1, columnspan=2, sticky='ew', pady=2)
-        
-        self.pre_agg_radio = ttk.Radiobutton(data_mode_frame, text="Pre-aggregated (Size + Frequency)", 
-                                           variable=self.data_mode_var, value='pre_aggregated',
-                                           command=self._on_data_mode_change)
-        self.pre_agg_radio.grid(row=0, column=0, sticky='w')
-        
-        self.raw_radio = ttk.Radiobutton(data_mode_frame, text="Raw Measurements (Size only)", 
-                                       variable=self.data_mode_var, value='raw_measurements',
-                                       command=self._on_data_mode_change)
-        self.raw_radio.grid(row=1, column=0, sticky='w')
-        
         #Column selection
-        ttk.Label(self.control_frame, text="Size Column:").grid(row=8, column=0, sticky='w', pady=2)
+        ttk.Label(self.control_frame, text="Size Column:").grid(row=7, column=0, sticky='w', pady=2)
         self.size_combo = ttk.Combobox(self.control_frame, textvariable=self.size_column_var, 
                                     state='readonly')
-        self.size_combo.grid(row=8, column=1, sticky='ew', pady=2)
+        self.size_combo.grid(row=7, column=1, sticky='ew', pady=2)
         self.size_combo.bind('<<ComboboxSelected>>', self._on_column_change)
 
         self.frequency_label = ttk.Label(self.control_frame, text="Frequency Column:")
-        self.frequency_label.grid(row=9, column=0, sticky='w', pady=2)
+        self.frequency_label.grid(row=7, column=0, sticky='w', pady=2)
         self.frequency_combo = ttk.Combobox(self.control_frame, textvariable=self.frequency_column_var, 
                                         state='readonly')
-        self.frequency_combo.grid(row=9, column=1, sticky='ew', pady=2)
+        self.frequency_combo.grid(row=7, column=1, sticky='ew', pady=2)
         self.frequency_combo.bind('<<ComboboxSelected>>', self._on_column_change)
 
         # Bin count control
-        ttk.Label(self.control_frame, text="Bins:").grid(row=10, column=0, sticky='w', pady=2)
+        ttk.Label(self.control_frame, text="Bins:").grid(row=8, column=0, sticky='w', pady=2)
 
         # Create frame for bin controls
         bin_frame = ttk.Frame(self.control_frame)
-        bin_frame.grid(row=10, column=1, columnspan=2, sticky='ew', pady=2)
+        bin_frame.grid(row=8, column=1, columnspan=2, sticky='ew', pady=2)
 
         # Bin count entry field only (remove slider)
         self.bin_entry = ttk.Entry(bin_frame, textvariable=self.bin_count_var, width=8)
@@ -386,22 +370,6 @@ class MainWindow:
         # Configure bin frame column weights (optional, for consistent spacing)
         bin_frame.columnconfigure(0, weight=0)  # Entry field doesn't need to expand
         bin_frame.columnconfigure(1, weight=1)  # Hint label can expand if needed
-        
-        # Statistical lines toggle
-        self.stats_lines_check = ttk.Checkbutton(self.control_frame, 
-                                                text="Show Mean & Std Dev Lines", 
-                                                variable=self.show_stats_lines_var,
-                                                command=self._on_stats_toggle)
-        self.stats_lines_check.grid(row=11, column=0, columnspan=2, sticky='w', pady=2)
-        
-        # Gaussian curve fitting toggle
-        self.gaussian_fit_check = ttk.Checkbutton(
-            self.control_frame, 
-            text="Show Gaussian Curve Fit", 
-            variable=self.show_gaussian_fit_var,
-            command=self._on_gaussian_toggle
-        )
-        self.gaussian_fit_check.grid(row=12, column=0, columnspan=2, sticky='w', pady=2)
 
         # Gaussian fit info button
         self.gaussian_info_btn = ttk.Button(
@@ -411,17 +379,17 @@ class MainWindow:
             state='disabled',
             width=10
         )
-        self.gaussian_info_btn.grid(row=12, column=2, sticky='w', padx=(10,0), pady=2)
+        self.gaussian_info_btn.grid(row=9, column=2, sticky='w', padx=(10,0), pady=2)
 
         # Plot button (all row numbers updated)
         self.plot_button = ttk.Button(self.control_frame, text="Create Plot", 
                                      command=self.create_plot, state='disabled')
-        self.plot_button.grid(row=13, column=0, columnspan=2, sticky='ew', pady=10)
+        self.plot_button.grid(row=10, column=0, columnspan=2, sticky='ew', pady=10)
         
         # Report generation button - will be mode-restricted
         self.report_button = ttk.Button(self.control_frame, text="Generate Report", 
                                        command=self.generate_report, state='disabled')
-        self.report_button.grid(row=14, column=0, columnspan=2, sticky='ew', pady=5)
+        self.report_button.grid(row=11, column=0, columnspan=2, sticky='ew', pady=5)
         
         # Show/hide report button based on availability
         if not REPORTS_AVAILABLE:
@@ -441,7 +409,7 @@ class MainWindow:
         
         self.save_graph_btn = ttk.Button(plot_nav_frame, text="💾 Save Graph", 
                                         command=self.save_graph, state='disabled')
-        self.save_graph_btn.pack(side='left', padx=25) #Space based on left button; may be a better way to do this
+        self.save_graph_btn.pack(side='left', expand=True) 
         
         self.next_dataset_btn = ttk.Button(plot_nav_frame, text="Next Dataset ▶", 
                                           command=self.next_dataset, state='disabled')
@@ -522,7 +490,7 @@ class MainWindow:
             
         self.analysis_mode_var.set('calibration')
         self._update_analysis_mode_ui()
-        self._load_single_file_with_preview()
+        self.load_multiple_files()
         
     def _load_for_verification(self):
         """Direct verification loading - sets mode and loads multiple files."""
@@ -664,7 +632,7 @@ class MainWindow:
         # Update mode description
         if mode == 'calibration':
             self.mode_description.config(
-                text="Current Mode: Calibration (Single dataset analysis)",
+                text="Current Mode: Calibration (Single/Multi dataset analysis)",
                 foreground='blue'
             )
         else:  # verification
@@ -683,7 +651,7 @@ class MainWindow:
         
         if is_calibration:
             self.mode_description.config(
-                text="Current Mode: Calibration (Single dataset analysis)",
+                text="Current Mode: Calibration (Single/Multi dataset analysis)",
                 foreground='blue'
             )
         else:
@@ -1618,7 +1586,6 @@ For more detailed help, please refer to the user manual or contact support."""
         self.bin_count_var.set(settings['bin_count'])
         self.size_column_var.set(settings['size_column'] or '')
         self.frequency_column_var.set(settings['frequency_column'] or '')
-        self.show_stats_lines_var.set(settings['show_stats_lines'])
         self.show_gaussian_fit_var.set(settings.get('show_gaussian_fit', True))
 
         # Update data processor mode
