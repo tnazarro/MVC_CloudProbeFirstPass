@@ -163,10 +163,10 @@ class FilePreviewDialog:
         # Mode-aware dialog title and sizing
         if self.mode == 'calibration':
             self.dialog.title("CSV File Preview - Calibration Mode")
-            self.dialog.geometry("950x750")
+            self.dialog.geometry("950x850")
         else:  # verification mode
             self.dialog.title("CSV File Preview - Verification Queue")
-            self.dialog.geometry("950x800")  # Slightly larger for queue info
+            self.dialog.geometry("950x900")  # Slightly larger for queue info
         
         self.dialog.grab_set()  # Make it modal
         
@@ -175,7 +175,7 @@ class FilePreviewDialog:
         self.dialog.update_idletasks()
         x = (self.dialog.winfo_screenwidth() // 2) - (475)
         y = (self.dialog.winfo_screenheight() // 2) - (375 if self.mode == 'calibration' else 400)
-        dialog_geometry = f"950x750+{x}+{y}" if self.mode == 'calibration' else f"950x800+{x}+{y}"
+        dialog_geometry = f"950x850+{x}+{y}" if self.mode == 'calibration' else f"950x900+{x}+{y}"
         self.dialog.geometry(dialog_geometry)
         
         # Handle dialog close
