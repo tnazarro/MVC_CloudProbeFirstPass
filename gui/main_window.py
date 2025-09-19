@@ -335,23 +335,6 @@ class MainWindow:
         # === DATA ANALYSIS CONTROLS ===
         ttk.Separator(self.control_frame, orient='horizontal').grid(row=6, column=0, columnspan=3, sticky='ew', pady=5)
         
-        #Commenting out data mode selection; default to raw measurements
-        # # Data mode selection
-        # ttk.Label(self.control_frame, text="Data Type:").grid(row=7, column=0, sticky='w', pady=2)
-        
-        # data_mode_frame = ttk.Frame(self.control_frame)
-        # data_mode_frame.grid(row=7, column=1, columnspan=2, sticky='ew', pady=2)
-        
-        # self.pre_agg_radio = ttk.Radiobutton(data_mode_frame, text="Pre-aggregated (Size + Frequency)", 
-        #                                    variable=self.data_mode_var, value='pre_aggregated',
-        #                                    command=self._on_data_mode_change)
-        # self.pre_agg_radio.grid(row=0, column=0, sticky='w')
-        
-        # self.raw_radio = ttk.Radiobutton(data_mode_frame, text="Raw Measurements (Size only)", 
-        #                                variable=self.data_mode_var, value='raw_measurements',
-        #                                command=self._on_data_mode_change)
-        # self.raw_radio.grid(row=1, column=0, sticky='w')
-        
         #Column selection
         ttk.Label(self.control_frame, text="Size Column:").grid(row=7, column=0, sticky='w', pady=2)
         self.size_combo = ttk.Combobox(self.control_frame, textvariable=self.size_column_var, 
@@ -387,24 +370,6 @@ class MainWindow:
         # Configure bin frame column weights (optional, for consistent spacing)
         bin_frame.columnconfigure(0, weight=0)  # Entry field doesn't need to expand
         bin_frame.columnconfigure(1, weight=1)  # Hint label can expand if needed
-        
-        #Commenting out toggle; off by default
-        # # Statistical lines toggle
-        # self.stats_lines_check = ttk.Checkbutton(self.control_frame, 
-        #                                         text="Show Mean & Std Dev Lines", 
-        #                                         variable=self.show_stats_lines_var,
-        #                                         command=self._on_stats_toggle)
-        # self.stats_lines_check.grid(row=11, column=0, columnspan=2, sticky='w', pady=2)
-        
-        #Commenting out toggle; on by default
-        # # Gaussian curve fitting toggle
-        # self.gaussian_fit_check = ttk.Checkbutton(
-        #     self.control_frame, 
-        #     text="Show Gaussian Curve Fit", 
-        #     variable=self.show_gaussian_fit_var,
-        #     command=self._on_gaussian_toggle
-        # )
-        # self.gaussian_fit_check.grid(row=12, column=0, columnspan=2, sticky='w', pady=2)
 
         # Gaussian fit info button
         self.gaussian_info_btn = ttk.Button(
@@ -1621,7 +1586,6 @@ For more detailed help, please refer to the user manual or contact support."""
         self.bin_count_var.set(settings['bin_count'])
         self.size_column_var.set(settings['size_column'] or '')
         self.frequency_column_var.set(settings['frequency_column'] or '')
-        #self.show_stats_lines_var.set(settings['show_stats_lines'])
         self.show_gaussian_fit_var.set(settings.get('show_gaussian_fit', True))
 
         # Update data processor mode
