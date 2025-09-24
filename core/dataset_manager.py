@@ -7,6 +7,8 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime
 import uuid
 from core.data_processor import ParticleDataProcessor
+from config.config_manager import ConfigManager
+
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +31,7 @@ class DatasetManager:
             '#85C1E9'   # Light Blue
         ]
         self._next_color_index = 0
+        self.config_manager = ConfigManager()
     
     def add_dataset(self, 
                    file_path: str, 
