@@ -34,10 +34,10 @@ class DatasetManager:
         self.config_manager = ConfigManager()
     
     def add_dataset(self, 
-                   file_path: str, 
-                   tag: str = "",
-                   notes: str = "",
-                   skip_rows: int = 0) -> Optional[str]:
+                file_path: str, 
+                tag: str = "",
+                notes: str = "",
+                skip_rows: int = 0) -> Optional[str]:
         """
         Add a new dataset from a CSV file.
         
@@ -62,7 +62,7 @@ class DatasetManager:
                 return None
             
             # Extract filename from path
-            filename = file_path.split('/')[-1].split('\\')[-1]  # Handle both Unix and Windows paths
+            filename = file_path.split('/')[-1].split('\\')[-1]
             
             # Assign color
             color = self._get_next_color()
@@ -70,23 +70,43 @@ class DatasetManager:
             # Get detected instrument type from the data processor
             instrument_type = data_processor.get_instrument_type()
             
-            # Create dataset entry
+            # Try to get config for this instrument
+            instrument_config = self.config_manager.get_instrument_config(instrument_type)
+            
+            # Start with programmatic defaults
+            bin_count = 50
+            size_column = data_processor.size_column
+            
+            # Apply config defaults if available
+            if instrument_config:
+                calibration = instrument_config.get('calibration', {})
+                if 'bins' in calibration:
+                    bin_count = calibration['bins']
+                    print(f"📊 Applied bin count from config: {bin_count}")
+                
+                variants = instrument_config.get('variants', [])
+                if variants and 'pbpKey' in variants[0]:
+                    config_size_column = variants[0]['pbpKey']
+                    if config_size_column in data_processor.get_columns():
+                        size_column = config_size_column
+                        print(f"📊 Applied size column from config: {size_column}")
+            
+            # Create dataset entry (with config-applied settings)
             dataset_info = {
                 'id': dataset_id,
                 'filename': filename,
                 'file_path': file_path,
-                'tag': tag or filename,  # Use filename as default tag
+                'tag': tag or filename,
                 'notes': notes,
                 'color': color,
                 'data_processor': data_processor,
                 'loaded_at': datetime.now(),
                 'skip_rows': skip_rows,
                 'instrument_type': instrument_type,
-                # Store current analysis settings per dataset
                 'analysis_settings': {
                     'data_mode': 'raw_measurements',
-                    'bin_count': 50,
-                    'size_column': data_processor.size_column,
+                    'bin_count': bin_count,  # Now from config!
+                    'size_column': size_column,
                     'frequency_column': data_processor.frequency_column,
                     'show_stats_lines': True,
                     'show_gaussian_fit': True

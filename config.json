@@ -1,0 +1,27 @@
+{
+  "version": "1.0",
+  "configs": [
+    {
+      "instrument": "CDP",
+      "calibration": {
+        "bins": 200
+      },
+      "variants": [
+        {
+          "pbpKey": "Size [counts]"
+        }
+      ]
+    },
+    {
+      "instrument": "CDP PBP",
+      "calibration": {
+        "bins": 200
+      },
+      "variants": [
+        {
+          "pbpKey": "Size [counts]"
+        }
+      ]
+    }
+  ]
+}
