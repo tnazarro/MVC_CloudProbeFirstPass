@@ -311,6 +311,10 @@ class MainWindow:
         # Dataset actions
         actions_frame = ttk.Frame(self.dataset_mgmt_frame)
         actions_frame.pack(fill='x', pady=5)
+
+        self.reset_config_btn = ttk.Button(actions_frame, text="Reset to Config",
+                                           command=self.reset_to_config_defaults, state='disabled')
+        self.reset_config_btn.pack(side='left', padx=(0,5))
         
         self.edit_notes_btn = ttk.Button(actions_frame, text="Edit Notes", 
                                         command=self.edit_dataset_notes, state='disabled')
@@ -1093,8 +1097,9 @@ class MainWindow:
         
         # Action buttons
         self.edit_notes_btn.config(state='normal' if has_datasets else 'disabled')
+        self.reset_config_btn.config(state='normal' if has_datasets else 'disabled')
         self.remove_dataset_btn.config(state='normal' if has_datasets else 'disabled')
-    
+
     def _on_dataset_select(self, event):
         """Handle dataset selection from treeview."""
         selection = self.dataset_treeview.selection()
@@ -1200,6 +1205,72 @@ class MainWindow:
         # Focus on text area
         notes_text.focus_set()
     
+    def reset_to_config_defaults(self):
+        """Reset the active dataset to configuration defaults."""
+        active_dataset = self.dataset_manager.get_active_dataset()
+        if not active_dataset:
+            return
+        
+        # Check if config is loaded
+        if not self.dataset_manager.config_manager.is_loaded():
+            messagebox.showwarning(
+                "Config Not Available",
+                f"Configuration file could not be loaded:\n{self.dataset_manager.config_manager.load_error}\n\n"
+                f"Using programmatic defaults only."
+            )
+            return
+        
+        # Confirm with user
+        result = messagebox.askyesno(
+            "Reset to Config Defaults",
+            f"Reset settings for '{active_dataset['tag']}' to configuration defaults?\n\n"
+            f"This will reset:\n"
+            f"  • Bin count\n"
+            f"  • Column selections\n"
+            f"  • Other analysis parameters\n\n"
+            f"Current plot settings will be overwritten."
+        )
+        
+        if result:
+            # Re-apply config defaults
+            instrument_type = active_dataset['instrument_type']
+            data_processor = active_dataset['data_processor']
+            
+            instrument_config = self.dataset_manager.config_manager.get_instrument_config(instrument_type)
+            
+            # Reset to defaults
+            bin_count = 50
+            size_column = data_processor.size_column
+            
+            if instrument_config:
+                calibration = instrument_config.get('calibration', {})
+                if 'bins' in calibration:
+                    bin_count = calibration['bins']
+                
+                variants = instrument_config.get('variants', [])
+                if variants and 'pbpKey' in variants[0]:
+                    config_size_column = variants[0]['pbpKey']
+                    if config_size_column in data_processor.get_columns():
+                        size_column = config_size_column
+            
+            # Update the settings
+            active_dataset['analysis_settings']['bin_count'] = bin_count
+            active_dataset['analysis_settings']['size_column'] = size_column
+            
+            # Reload UI
+            self._load_active_dataset_settings()
+            self._update_column_combos()
+            self._update_stats_display()
+            
+            # Update plot if exists
+            if hasattr(self, 'canvas'):
+                self._update_plot()
+            
+            messagebox.showinfo(
+                "Reset Complete",
+                f"Settings for '{active_dataset['tag']}' have been reset to configuration defaults."
+            )
+
     def _on_gaussian_toggle(self):
         """Handle Gaussian curve fitting toggle change."""
         # Save settings to active dataset
