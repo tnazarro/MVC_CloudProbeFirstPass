@@ -10,7 +10,6 @@ class ConfigManager:
     def __init__(self, config_path: str = "config.json"):
         self.config_path = Path(config_path)
         self.config_data: Optional[Dict[str, Any]] = None
-        self.load_error: Optional[str] = None
         
         # Try to load on creation
         self._load_config()
@@ -18,9 +17,9 @@ class ConfigManager:
     def _load_config(self) -> bool:
         """Try to load the config file."""
         if not self.config_path.exists():
-            self.load_error = f"Config file not found: {self.config_path}"
-            logger.warning(self.load_error)
-            print(f"⚠️  {self.load_error}")
+            load_error = f"Config file not found: {self.config_path}"
+            logger.warning(load_error)
+            print(f"⚠️  {load_error}")
             return False
         
         try:
@@ -32,14 +31,14 @@ class ConfigManager:
             return True
             
         except json.JSONDecodeError as e:
-            self.load_error = f"Invalid JSON: {e}"
-            logger.error(self.load_error)
-            print(f"❌ {self.load_error}")
+            load_error = f"Invalid JSON: {e}"
+            logger.error(load_error)
+            print(f"❌ {load_error}")
             return False
         except Exception as e:
-            self.load_error = f"Error loading config: {e}"
-            logger.error(self.load_error)
-            print(f"❌ {self.load_error}")
+            load_error = f"Error loading config: {e}"
+            logger.error(load_error)
+            print(f"❌ {load_error}")
             return False
     
     def is_loaded(self) -> bool:

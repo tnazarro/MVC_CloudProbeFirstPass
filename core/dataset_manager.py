@@ -105,7 +105,7 @@ class DatasetManager:
                 'instrument_type': instrument_type,
                 'analysis_settings': {
                     'data_mode': 'raw_measurements',
-                    'bin_count': bin_count,  # Now from config!
+                    'bin_count': bin_count,
                     'size_column': size_column,
                     'frequency_column': data_processor.frequency_column,
                     'show_stats_lines': True,
