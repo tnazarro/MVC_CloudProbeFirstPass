@@ -10,9 +10,11 @@ from tkinter import ttk, filedialog, messagebox, simpledialog
 import logging
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 import matplotlib.pyplot as plt
+import matplotlib.figure
 import numpy as np
 from datetime import datetime
 import sys
+from typing import Dict, List, Optional, Any
 
 from core.data_processor import ParticleDataProcessor
 from core.dataset_manager import DatasetManager
@@ -215,6 +217,19 @@ class MainWindow:
         )
         self.mode_description.pack(anchor='w', pady=(5,0))
         
+        # Serial number input (session-level for all datasets)
+        self.serial_frame = ttk.Frame(self.load_buttons_frame)
+        self.serial_frame.pack(fill='x', pady=(10,0))
+
+        ttk.Label(self.serial_frame, text="Instrument Serial Number:").pack(side='left', padx=(0,5))
+
+        self.serial_var = tk.StringVar(value=self.dataset_manager.instrument_serial_number)
+        self.serial_entry = ttk.Entry(self.serial_frame, textvariable=self.serial_var, width=20)
+        self.serial_entry.pack(side='left')
+
+        # Bind to update manager when changed
+        self.serial_var.trace_add('write', self._on_serial_number_change)
+
         # Queue status display
         self.queue_status_frame = ttk.Frame(self.control_frame)
         self.queue_status_frame.grid(row=1, column=0, columnspan=3, sticky='ew', pady=2)
@@ -501,6 +516,12 @@ class MainWindow:
         self._update_analysis_mode_ui()
         self.load_multiple_files()
     
+    def _on_serial_number_change(self, *args):
+        """Handle serial number changes - auto-sync to DatasetManager."""
+        new_serial = self.serial_var.get().strip()
+        self.dataset_manager.instrument_serial_number = new_serial
+        logger.debug(f"Serial number updated: {new_serial}")
+
     def _confirm_clear_datasets_if_needed(self):
         """
         Returns:
@@ -1716,6 +1737,7 @@ For more detailed help, please refer to the user manual or contact support."""
         stats_str = f"Dataset: {active_dataset['tag']}\n"
         stats_str += f"File: {active_dataset['filename']}\n"
         stats_str += f"Instrument: {stats.get('instrument_type', 'Unknown')}\n"
+        stats_str += f"Serial Number: {self.dataset_manager.instrument_serial_number or 'Not set'}\n"
         stats_str += f"Rows: {stats.get('total_rows', 'N/A')}\n"
         stats_str += f"Columns: {stats.get('total_columns', 'N/A')}\n"
         stats_str += f"Mode: {stats.get('data_mode', 'N/A')}\n"
@@ -1961,36 +1983,29 @@ For more detailed help, please refer to the user manual or contact support."""
             return  # User cancelled
         
         try:
-            # Collect current analysis data
-            data_stats = active_dataset['data_processor'].get_data_stats()
+            # Generate plots for all datasets
+            figures = []
+            all_datasets = self.dataset_manager.get_all_datasets()
             
-            # Collect analysis parameters (including mode information)
-            analysis_params = {
-                'analysis_mode': self.analysis_mode_var.get(),
-                'data_mode': self.data_mode_var.get(),
-                'bin_count': self.bin_count_var.get(),
-                'size_column': self.size_column_var.get(),
-                'frequency_column': self.frequency_column_var.get(),
-                'skip_rows': active_dataset['skip_rows'],
-                'show_stats_lines': self.show_stats_lines_var.get()
-            }
+            for dataset in all_datasets:
+                figure = self._generate_plot_for_dataset(dataset)
+                if figure:
+                    figures.append(figure)
             
-            # File information
-            file_info = {
-                'filename': active_dataset['filename'],
-                'dataset_tag': active_dataset['tag'],
-                'dataset_notes': active_dataset['notes'],
-                'generated_at': self._get_current_timestamp()
-            }
+            if not figures:
+                messagebox.showerror("Error", "Failed to generate any plots for the report.")
+                return
             
-            # Generate the report
+            # Generate the multi-plot report
             success = self.report_template.create_report(
                 output_path=file_path,
-                plot_figure=self.current_figure,
-                data_stats=data_stats,
-                analysis_params=analysis_params,
-                file_info=file_info
+                plot_figures=figures,  # List instead of single figure
+                instrument_serial_number=self.dataset_manager.instrument_serial_number
             )
+            
+            # Clean up generated figures
+            for fig in figures:
+                plt.close(fig)
             
             if success:
                 messagebox.showinfo("Success", f"Report generated successfully!\nSaved to: {file_path}")
@@ -1998,12 +2013,61 @@ For more detailed help, please refer to the user manual or contact support."""
                 messagebox.showerror("Error", "Failed to generate report. Check console for details.")
                 
         except Exception as e:
+            # Add full traceback to see exactly where the error occurs
+            import traceback
+            logger.error(f"Failed to generate report: {str(e)}")
+            logger.error(f"Full traceback: {traceback.format_exc()}")
             messagebox.showerror("Error", f"Failed to generate report: {str(e)}")
     
     def _get_current_timestamp(self):
         """Get current timestamp for report."""
         return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
     
+    def _generate_plot_for_dataset(self, dataset: Dict[str, Any]) -> Optional[matplotlib.figure.Figure]:
+        """Generate a plot for a specific dataset with metadata."""
+        try:
+            data_processor = dataset['data_processor']
+            settings = dataset['analysis_settings']
+            
+            # Get data
+            size_data = data_processor.get_size_data()
+            frequency_data = data_processor.get_frequency_data()
+            
+            if size_data is None:
+                logger.warning(f"No size data for dataset {dataset['tag']}")
+                return None
+            
+            # Build metadata
+            metadata = {
+                'bead_size': dataset['tag'],
+                'serial_number': self.dataset_manager.instrument_serial_number,
+                'filename': dataset['filename'],
+                'timestamp': dataset['loaded_at'].strftime("%Y-%m-%d %H:%M:%S"),
+                # Material and lot_number will come from config later
+            }
+            
+            # Create plot title
+            plot_title = f"Particle Size Distribution - {dataset['tag']} μm"
+            
+            # Generate the figure
+            figure = self.plotter.create_histogram(
+                size_data=size_data,
+                frequency_data=frequency_data,
+                bin_count=settings['bin_count'],
+                title=plot_title,
+                show_stats_lines=settings.get('show_stats_lines', True),
+                data_mode=settings['data_mode'],
+                show_gaussian_fit=settings.get('show_gaussian_fit', True),
+                metadata=metadata
+            )
+            
+            return figure
+            
+        except Exception as e:
+            logger.error(f"Error generating plot for dataset {dataset.get('tag', 'unknown')}: {e}")
+            return None
+
     def _update_report_button_state(self):
         """Update the report button state based on available data, plot, and mode."""
         self._update_report_button_state_for_mode()
