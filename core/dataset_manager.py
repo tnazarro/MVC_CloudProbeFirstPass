@@ -8,7 +8,7 @@ from datetime import datetime
 import uuid
 from core.data_processor import ParticleDataProcessor
 from config.config_manager import ConfigManager
-
+from config.constants import DEFAULT_BIN_COUNT
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +74,7 @@ class DatasetManager:
             instrument_config = self.config_manager.get_instrument_config(instrument_type)
             
             # Start with programmatic defaults
-            bin_count = 50
+            bin_count = DEFAULT_BIN_COUNT
             size_column = data_processor.size_column
             
             # Apply config defaults if available

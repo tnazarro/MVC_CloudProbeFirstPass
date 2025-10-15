@@ -4,6 +4,8 @@ import logging
 from pathlib import Path
 from typing import Optional, Dict, Any
 
+from config.constants import CONFIG_VALIDATION_SCHEMA, DEFAULT_BIN_COUNT
+
 logger = logging.getLogger(__name__)
 
 class ConfigManager:
@@ -148,7 +150,38 @@ class ConfigManager:
         
         print(f"⚠️  No config found for {instrument_type}")
         return None
-    
+
+    def _validate_all_configs(self) -> None:
+        """
+        Validate all instrument configurations against schema.
+        Invalid configs are either fixed or removed.
+        """
+        if not self.config_data or 'configs' not in self.config_data:
+            logger.warning("No configs array found in config file")
+            return
+        
+        configs = self.config_data['configs']
+        validated_configs = []
+        
+        for config in configs:
+            # Check required instrument field first
+            if not self._validate_instrument_field(config):
+                # Skip this entire config - can't identify it
+                continue
+            
+            instrument = config.get('instrument')
+            logger.info(f"Validating config for {instrument}")
+            
+            # Validate and fix all other fields
+            self._validate_config_fields(config, CONFIG_VALIDATION_SCHEMA, instrument)
+            
+            # Keep this config
+            validated_configs.append(config)
+        
+        # Replace with validated list
+        self.config_data['configs'] = validated_configs
+        logger.info(f"Validated {len(validated_configs)} instrument configs")
+
     def _validate_instrument_field(self, config: dict) -> bool:
         """
         Validate the required instrument field.
@@ -180,7 +213,7 @@ class ConfigManager:
         
         return True
     
-    def _validate_config_fields(self, config: dict, schema: dict) -> None:
+    def _validate_config_fields(self, config: dict, schema: dict, instrument: str = 'Unknown') -> None:
         """
         Validate and fix all fields in a config against schema.
         Modifies config dict in place.
@@ -188,8 +221,8 @@ class ConfigManager:
         Args:
             config: Single instrument config dict
             schema: Schema definition dict
+            instrument: Instrument name for logging (passed through recursion)
         """
-        instrument = config.get('instrument', 'Unknown')
         
         for field_name, field_schema in schema.items():
             # Skip 'instrument' - already validated
@@ -260,5 +293,73 @@ class ConfigManager:
         # No specific validation needed
         return value
     
-    def _validate_int_field(self):
-        """ Template validation field"""
+    def _validate_int_field(self, value: int, field_name: str, field_schema: dict, 
+                        instrument: str, default_value) -> int:
+        """Validate integer field with min/max constraints."""
+        min_val = field_schema.get('min')
+        max_val = field_schema.get('max')
+        
+        # Check min constraint
+        if min_val is not None and value < min_val:
+            logger.warning(f"{instrument}: '{field_name}' value {value} below minimum {min_val}, using default: {default_value}")
+            print(f"⚠️  {instrument}: '{field_name}' too small ({value} < {min_val}), using default: {default_value}")
+            return default_value
+        
+        # Check max constraint
+        if max_val is not None and value > max_val:
+            logger.warning(f"{instrument}: '{field_name}' value {value} above maximum {max_val}, using default: {default_value}")
+            print(f"⚠️  {instrument}: '{field_name}' too large ({value} > {max_val}), using default: {default_value}")
+            return default_value
+        
+        # Valid
+        return value
+    
+    def _validate_str_field(self, value: str, field_name: str, field_schema: dict,
+                       instrument: str, default_value) -> str:
+        """Validate string field with length constraints."""
+        min_length = field_schema.get('min_length')
+        
+        # Check minimum length
+        if min_length is not None and len(value.strip()) < min_length:
+            logger.warning(f"{instrument}: '{field_name}' too short (min {min_length}), using default: {default_value}")
+            print(f"⚠️  {instrument}: '{field_name}' empty or too short, using default: {default_value}")
+            return default_value
+        
+        # Valid
+        return value
+    
+    def _validate_dict_field(self, value: dict, field_name: str, field_schema: dict,
+                        instrument: str) -> dict:
+        """Validate nested dictionary against nested schema."""
+        nested_schema = field_schema.get('schema')
+        
+        if not nested_schema:
+            # No nested validation rules
+            return value
+        
+        # Recursively validate nested fields
+        self._validate_config_fields(value, nested_schema, instrument)
+        
+        return value
+    
+    def _validate_list_field(self, value: list, field_name: str, field_schema: dict,
+                        instrument: str) -> list:
+        """Validate list and its items against item schema."""
+        item_schema = field_schema.get('item_schema')
+        
+        if not item_schema:
+            # No item validation rules
+            return value
+        
+        # Validate each item in the list
+        validated_items = []
+        for i, item in enumerate(value):
+            if not isinstance(item, dict):
+                logger.warning(f"{instrument}: '{field_name}[{i}]' is not a dict, skipping")
+                continue
+            
+            # Validate this item as a nested config
+            self._validate_config_fields(item, item_schema)
+            validated_items.append(item)
+        
+        return validated_items
