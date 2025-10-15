@@ -1186,6 +1186,7 @@ class MainWindow:
         """Edit the notes of the active dataset."""
         active_dataset = self.dataset_manager.get_active_dataset()
         if not active_dataset:
+            logger.warning("edit_dataset_notes called with no active dataset")
             return
         
         # Create a dialog for multi-line notes editing
@@ -1234,6 +1235,7 @@ class MainWindow:
         """Reset the active dataset to configuration defaults."""
         active_dataset = self.dataset_manager.get_active_dataset()
         if not active_dataset:
+            logger.warning("reset_to_config_defaults called with no active dataset")
             return
         
         # Check if config is loaded
@@ -1586,6 +1588,7 @@ For more detailed help, please refer to the user manual or contact support."""
         """Remove the active dataset."""
         active_dataset = self.dataset_manager.get_active_dataset()
         if not active_dataset:
+            logger.warning("remove_dataset called with no active dataset")
             return
         
         # Confirm removal
