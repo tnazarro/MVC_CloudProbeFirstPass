@@ -39,6 +39,8 @@ class ConfigManager:
             with open(self.config_path, 'r', encoding='utf-8') as f:
                 self.config_data = json.load(f)
             
+            self._validate_all_configs()
+
             self.config_file_loaded = True
             logger.info(f"✅ Config loaded from {self.config_path}")
             print(f"✅ Config loaded! Version: {self.config_data.get('version', 'unknown')}")
@@ -55,7 +57,7 @@ class ConfigManager:
             print(f"❌ Error loading config: {e}")
             self.config_file_loaded = False
             return False
-    
+
     def is_loaded(self) -> bool:
         """Check if config loaded successfully."""
         return self.config_data is not None
@@ -147,22 +149,116 @@ class ConfigManager:
         print(f"⚠️  No config found for {instrument_type}")
         return None
     
-    def _load_defaults_to_memory(self) -> None:
-        """Load minimal defaults into memory when file can't be created."""
-        self.config_data = {
-            "version": "1.0",
-            "configs": [
-                {
-                    "instrument": "CDP",
-                    "calibration": {
-                        "bins": 200
-                    },
-                    "variants": [
-                        {
-                            "pbpKey": "Size [counts]"
-                        }
-                    ]
-                }
-            ]
-        }
-        logger.info("Loaded default config to memory")
+    def _validate_instrument_field(self, config: dict) -> bool:
+        """
+        Validate the required instrument field.
+        
+        Args:
+            config: Single instrument config dict
+            
+        Returns:
+            bool: True if valid, False if missing/invalid (skip this config)
+        """
+        if 'instrument' not in config:
+            logger.warning("Config missing required 'instrument' field - skipping")
+            print("⚠️  Skipping config entry: missing instrument name")
+            return False
+        
+        instrument = config['instrument']
+        
+        # Check type
+        if not isinstance(instrument, str):
+            logger.warning(f"Invalid instrument type: {type(instrument)} - skipping")
+            print(f"⚠️  Skipping config entry: instrument must be string, got {type(instrument)}")
+            return False
+        
+        # Check not empty
+        if not instrument.strip():
+            logger.warning("Config has empty instrument field - skipping")
+            print("⚠️  Skipping config entry: instrument name is empty")
+            return False
+        
+        return True
+    
+    def _validate_config_fields(self, config: dict, schema: dict) -> None:
+        """
+        Validate and fix all fields in a config against schema.
+        Modifies config dict in place.
+        
+        Args:
+            config: Single instrument config dict
+            schema: Schema definition dict
+        """
+        instrument = config.get('instrument', 'Unknown')
+        
+        for field_name, field_schema in schema.items():
+            # Skip 'instrument' - already validated
+            if field_name == 'instrument':
+                continue
+            
+            # Get current value (might not exist)
+            current_value = config.get(field_name)
+            
+            # Validate this field
+            validated_value = self._validate_single_field(
+                value=current_value,
+                field_name=field_name,
+                field_schema=field_schema,
+                instrument=instrument
+            )
+            
+            # Update config with validated value
+            if validated_value is not None:
+                config[field_name] = validated_value
+            elif field_name in config:
+                # Field existed but is now invalid and has no default
+                del config[field_name]
+
+    def _validate_single_field(self, value, field_name: str, field_schema: dict, instrument: str):
+        """
+        Validate a single field against its schema rules.
+        
+        Args:
+            value: Current field value (may be None)
+            field_name: Name of the field being validated
+            field_schema: Schema rules for this field
+            instrument: Instrument name (for logging)
+            
+        Returns:
+            Validated/fixed value, or None if should be removed
+        """
+        required = field_schema.get('required', False)
+        expected_type = field_schema.get('type')
+        default_value = field_schema.get('default')
+        
+        # Handle missing field
+        if value is None:
+            if required:
+                logger.warning(f"{instrument}: Required field '{field_name}' missing, using default: {default_value}")
+                print(f"⚠️  {instrument}: Missing '{field_name}', using default: {default_value}")
+                return default_value
+            else:
+                # Optional and missing - return default if available
+                return default_value
+        
+        # Check type
+        if expected_type and not isinstance(value, expected_type):
+            logger.warning(f"{instrument}: Invalid type for '{field_name}': expected {expected_type.__name__}, got {type(value).__name__}")
+            print(f"⚠️  {instrument}: Invalid '{field_name}' type, using default: {default_value}")
+            return default_value
+        
+        # Type-specific validation
+        if expected_type == int:
+            return self._validate_int_field(value, field_name, field_schema, instrument, default_value)
+        elif expected_type == str:
+            return self._validate_str_field(value, field_name, field_schema, instrument, default_value)
+        elif expected_type == dict:
+            return self._validate_dict_field(value, field_name, field_schema, instrument)
+        elif expected_type == list:
+            return self._validate_list_field(value, field_name, field_schema, instrument)
+        
+        # No specific validation needed
+        return value
+    
+    def _validate_int_field(self):
+        """ Template validation field"""
