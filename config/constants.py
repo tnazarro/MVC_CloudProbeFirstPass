@@ -79,3 +79,5 @@ INSTRUMENT_PREVIEW_DEFAULTS = { #TODO: Choose defaults wisely for each instrumen
 }
 
 DEFAULT_PREVIEW_LINES = 15 
+
+REPORT_MARGIN = 36  # Margin size in points

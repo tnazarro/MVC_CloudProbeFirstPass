@@ -1999,7 +1999,7 @@ For more detailed help, please refer to the user manual or contact support."""
             # Generate the multi-plot report
             success = self.report_template.create_report(
                 output_path=file_path,
-                plot_figures=figures,  # List instead of single figure
+                plot_figures=figures, 
                 instrument_serial_number=self.dataset_manager.instrument_serial_number
             )
             
@@ -2013,10 +2013,6 @@ For more detailed help, please refer to the user manual or contact support."""
                 messagebox.showerror("Error", "Failed to generate report. Check console for details.")
                 
         except Exception as e:
-            # Add full traceback to see exactly where the error occurs
-            import traceback
-            logger.error(f"Failed to generate report: {str(e)}")
-            logger.error(f"Full traceback: {traceback.format_exc()}")
             messagebox.showerror("Error", f"Failed to generate report: {str(e)}")
     
     def _get_current_timestamp(self):

@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List
 import matplotlib.pyplot as plt
 import matplotlib.figure
+import traceback
+from config.constants import REPORT_MARGIN
 
 try:
     from reportlab.lib import colors
@@ -100,10 +102,10 @@ class PDFReportGenerator:
             doc = SimpleDocTemplate(
                 output_path,
                 pagesize=letter,
-                rightMargin=36,
-                leftMargin=36,
-                topMargin=36,
-                bottomMargin=36
+                rightMargin= REPORT_MARGIN,
+                leftMargin= REPORT_MARGIN,
+                topMargin= REPORT_MARGIN,
+                bottomMargin= REPORT_MARGIN
             )
             
             # Build the story (content)
@@ -128,7 +130,6 @@ class PDFReportGenerator:
             return True
             
         except Exception as e:
-            import traceback
             logger.error(f"Failed to generate PDF report: {str(e)}")
             logger.error(f"Full traceback:\n{traceback.format_exc()}")
             return False
