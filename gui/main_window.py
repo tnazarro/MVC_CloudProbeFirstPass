@@ -17,9 +17,7 @@ import sys
 from core.data_processor import ParticleDataProcessor
 from core.dataset_manager import DatasetManager
 from core.plotter import ParticlePlotter
-from config.constants import (SUPPORTED_FILE_TYPES, MIN_BIN_COUNT, MAX_BIN_COUNT, DEFAULT_BIN_COUNT,
-                             FONT_PROGRESS, FONT_INSTRUMENT_TYPE, FONT_HINT_TEXT, FONT_STATUS, FONT_FILE_NAME, FONT_PREVIEW_TEXT, FONT_STATUS_LARGE,
-                             EXPORT_DPI, DEFAULT_BIN_COUNT)
+from config.constants import *
 from core.file_queue import FileQueue
 from gui.dialogs.file_preview import FilePreviewDialog
 from gui.dialogs.load_choice import LoadChoiceDialog
