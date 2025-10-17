@@ -81,3 +81,38 @@ INSTRUMENT_PREVIEW_DEFAULTS = { #TODO: Choose defaults wisely for each instrumen
 DEFAULT_PREVIEW_LINES = 15 
 
 REPORT_MARGIN = 36  # Margin size in points
+
+# Configuration validation schema
+CONFIG_VALIDATION_SCHEMA = {
+    'instrument': {
+        'type': str,
+        'required': True,
+        'min_length': 1
+    },
+    'calibration': {
+        'type': dict,
+        'required': False,
+        'schema': {
+            'bins': {
+                'type': int,
+                'min': MIN_BIN_COUNT,
+                'max': MAX_BIN_COUNT,
+                'default': DEFAULT_BIN_COUNT,
+                'required': False
+            }
+        }
+    },
+    'variants': {
+        'type': list,
+        'required': False,
+        'default': [],
+        'item_schema': {
+            'pbpKey': {
+                'type': str,
+                'min_length': 1,
+                'default': 'Size [counts]',
+                'required': False
+            }
+        }
+    }
+}

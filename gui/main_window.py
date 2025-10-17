@@ -19,8 +19,7 @@ from typing import Dict, List, Optional, Any
 from core.data_processor import ParticleDataProcessor
 from core.dataset_manager import DatasetManager
 from core.plotter import ParticlePlotter
-from config.constants import (SUPPORTED_FILE_TYPES, MIN_BIN_COUNT, MAX_BIN_COUNT, DEFAULT_BIN_COUNT,
-                             FONT_PROGRESS, FONT_INSTRUMENT_TYPE, FONT_HINT_TEXT, FONT_STATUS, FONT_FILE_NAME, FONT_PREVIEW_TEXT, FONT_STATUS_LARGE, EXPORT_DPI)
+from config.constants import *
 from core.file_queue import FileQueue
 from gui.dialogs.file_preview import FilePreviewDialog
 from gui.dialogs.load_choice import LoadChoiceDialog
@@ -138,6 +137,13 @@ class MainWindow:
         self.plotter = ParticlePlotter()
         self.file_queue = FileQueue()
         
+        self.show_config_warning = False
+        
+        #Check config status and show banner if needed
+        if not self.dataset_manager.config_manager.is_config_file_loaded():
+            self.show_config_warning = True
+            # Banner will be shown after widgets are created
+
         # GUI variables
         self.bin_count_var = tk.IntVar(value=DEFAULT_BIN_COUNT)
         self.size_column_var = tk.StringVar()
@@ -173,6 +179,10 @@ class MainWindow:
         self._create_widgets()
         self._create_layout()
         
+        #Show banner after widgets exist
+        if self.show_config_warning:
+            self._show_config_warning_banner()
+
         # Initialize UI state
         self._update_data_mode_ui()
         self._update_dataset_ui()
@@ -326,6 +336,10 @@ class MainWindow:
         # Dataset actions
         actions_frame = ttk.Frame(self.dataset_mgmt_frame)
         actions_frame.pack(fill='x', pady=5)
+
+        self.reset_config_btn = ttk.Button(actions_frame, text="Reset to Config",
+                                           command=self.reset_to_config_defaults, state='disabled')
+        self.reset_config_btn.pack(side='left', padx=(0,5))
         
         self.edit_notes_btn = ttk.Button(actions_frame, text="Edit Notes", 
                                         command=self.edit_dataset_notes, state='disabled')
@@ -497,6 +511,15 @@ class MainWindow:
     
     # === DIRECT LOAD METHODS ===
     
+    def _show_config_warning_banner(self):
+        """Show persistent config warning in queue status area."""
+        self.queue_status_label.config(
+            text="⚠️  Config: Using Built-in Defaults (may be outdated)",
+            foreground='red',
+            font=FONT_STATUS
+        )
+        logger.info("Displaying config warning banner")
+
     def _load_for_calibration(self):
         """Direct calibration loading - sets mode and loads single file."""
         # Check if we need to clear existing datasets
@@ -968,6 +991,10 @@ class MainWindow:
 
     def _update_queue_status(self):
         """Update the queue status display."""
+        # Don't overwrite config warning
+        if self.show_config_warning:
+            return
+
         if not self.file_queue.has_more_files() and len(self.file_queue.files) == 0:
             self.queue_status_label.config(text="")
             return
@@ -1114,8 +1141,9 @@ class MainWindow:
         
         # Action buttons
         self.edit_notes_btn.config(state='normal' if has_datasets else 'disabled')
+        self.reset_config_btn.config(state='normal' if has_datasets else 'disabled')
         self.remove_dataset_btn.config(state='normal' if has_datasets else 'disabled')
-    
+
     def _on_dataset_select(self, event):
         """Handle dataset selection from treeview."""
         selection = self.dataset_treeview.selection()
@@ -1177,6 +1205,7 @@ class MainWindow:
         """Edit the notes of the active dataset."""
         active_dataset = self.dataset_manager.get_active_dataset()
         if not active_dataset:
+            logger.warning("edit_dataset_notes called with no active dataset")
             return
         
         # Create a dialog for multi-line notes editing
@@ -1221,6 +1250,73 @@ class MainWindow:
         # Focus on text area
         notes_text.focus_set()
     
+    def reset_to_config_defaults(self):
+        """Reset the active dataset to configuration defaults."""
+        active_dataset = self.dataset_manager.get_active_dataset()
+        if not active_dataset:
+            logger.warning("reset_to_config_defaults called with no active dataset")
+            return
+        
+        # Check if config is loaded
+        if not self.dataset_manager.config_manager.is_loaded():
+            messagebox.showwarning(
+                "Config Not Available",
+                f"Configuration file could not be loaded:\n{self.dataset_manager.config_manager.load_error}\n\n"
+                f"Using programmatic defaults only."
+            )
+            return
+        
+        # Confirm with user
+        result = messagebox.askyesno(
+            "Reset to Config Defaults",
+            f"Reset settings for '{active_dataset['tag']}' to configuration defaults?\n\n"
+            f"This will reset:\n"
+            f"  • Bin count\n"
+            f"  • Column selections\n"
+            f"  • Other analysis parameters\n\n"
+            f"Current plot settings will be overwritten."
+        )
+        
+        if result:
+            # Re-apply config defaults
+            instrument_type = active_dataset['instrument_type']
+            data_processor = active_dataset['data_processor']
+            
+            instrument_config = self.dataset_manager.config_manager.get_instrument_config(instrument_type)
+            
+            # Reset to defaults
+            bin_count = DEFAULT_BIN_COUNT
+            size_column = data_processor.size_column
+            
+            if instrument_config:
+                calibration = instrument_config.get('calibration', {})
+                if 'bins' in calibration:
+                    bin_count = calibration['bins']
+                
+                variants = instrument_config.get('variants', [])
+                if variants and 'pbpKey' in variants[0]:
+                    config_size_column = variants[0]['pbpKey']
+                    if config_size_column in data_processor.get_columns():
+                        size_column = config_size_column
+            
+            # Update the settings
+            active_dataset['analysis_settings']['bin_count'] = bin_count
+            active_dataset['analysis_settings']['size_column'] = size_column
+            
+            # Reload UI
+            self._load_active_dataset_settings()
+            self._update_column_combos()
+            self._update_stats_display()
+            
+            # Update plot if exists
+            if hasattr(self, 'canvas'):
+                self._update_plot()
+            
+            messagebox.showinfo(
+                "Reset Complete",
+                f"Settings for '{active_dataset['tag']}' have been reset to configuration defaults."
+            )
+
     def _on_gaussian_toggle(self):
         """Handle Gaussian curve fitting toggle change."""
         # Save settings to active dataset
@@ -1511,6 +1607,7 @@ For more detailed help, please refer to the user manual or contact support."""
         """Remove the active dataset."""
         active_dataset = self.dataset_manager.get_active_dataset()
         if not active_dataset:
+            logger.warning("remove_dataset called with no active dataset")
             return
         
         # Confirm removal

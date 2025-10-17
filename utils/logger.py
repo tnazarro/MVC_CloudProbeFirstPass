@@ -30,7 +30,7 @@ def setup_logger(log_level=logging.INFO, log_file=None):
         level=log_level,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.FileHandler(log_file),
+            logging.FileHandler(log_file, encoding='utf-8'),
             logging.StreamHandler()  # Also log to console
         ]
     )
