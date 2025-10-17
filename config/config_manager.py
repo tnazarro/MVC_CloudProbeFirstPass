@@ -13,11 +13,20 @@ class ConfigManager:
         self.config_path = Path(config_path)
         self.config_data: Optional[Dict[str, Any]] = None
         
-        # Try to load on creation
-        self._load_config()
+        # Load config (falls back to defaults if needed)
+        loaded_from_file = self._load_config()
+        
+        if not loaded_from_file:
+            logger.warning("Configuration loaded from defaults")
+            print("⚠️  Using default configuration (config.json not loaded)")
     
     def _load_config(self) -> bool:
-        """Try to load the config file, creating defaults if needed."""
+        """
+        Try to load the config file, creating defaults if needed.
+        
+        Returns:
+            bool: True if loaded from file, False if using defaults
+        """
         
         # Check if config file exists
         if not self.config_path.exists():
@@ -30,11 +39,7 @@ class ConfigManager:
                 # Fall through to normal loading below
             else:
                 # Couldn't create file, use in-memory defaults
-                logger.warning("Using in-memory defaults (config file could not be created)")
-                print(f"⚠️  Using built-in defaults (may be outdated)")
-                self._load_defaults_to_memory()
-                self.config_file_loaded = False
-                return True
+                return self._fallback_to_defaults("config file not found")
         
         # Load from file (either existing or newly created)
         try:
@@ -50,15 +55,29 @@ class ConfigManager:
             
         except json.JSONDecodeError as e:
             logger.error(f"Invalid JSON in config: {e}")
-            print(f"❌ Invalid JSON: {e}")
-            self.config_file_loaded = False
-            return False
+            print(f"❌ Invalid JSON in config file")
+            return self._fallback_to_defaults("invalid JSON")
             
         except Exception as e:
             logger.error(f"Error loading config: {e}")
             print(f"❌ Error loading config: {e}")
-            self.config_file_loaded = False
-            return False
+            return self._fallback_to_defaults(f"error reading file: {e}")
+
+    def _fallback_to_defaults(self, reason: str) -> bool:
+        """
+        Load default configuration into memory and notify user.
+        
+        Args:
+            reason: Description of why fallback was needed
+            
+        Returns:
+            bool: Always returns False to indicate file was not loaded
+        """
+        logger.warning(f"Falling back to defaults: {reason}")
+        print(f"⚠️  Falling back to built-in defaults")
+        self._load_defaults_to_memory()
+        self.config_file_loaded = False
+        return False
 
     def is_loaded(self) -> bool:
         """Check if config loaded successfully."""
