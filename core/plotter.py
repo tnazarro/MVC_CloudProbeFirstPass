@@ -40,7 +40,8 @@ class ParticlePlotter:
     def create_histogram(self, size_data: np.ndarray, frequency_data: Optional[np.ndarray] = None, 
                         bin_count: int = DEFAULT_BIN_COUNT, title: str = "Particle Size Distribution", 
                         show_stats_lines: bool = True, data_mode: str = "pre_aggregated",
-                        show_gaussian_fit: bool = True) -> matplotlib.figure.Figure:
+                        show_gaussian_fit: bool = True,
+                        metadata: Optional[Dict[str, Any]] = None) -> matplotlib.figure.Figure:
         """
         Create a histogram plot of particle size data with optional Gaussian curve fitting.
         
@@ -162,7 +163,11 @@ class ParticlePlotter:
             if show_gaussian_fit and gaussian_fit_result and gaussian_fit_result['success']:
                 self.ax.legend(loc='upper right', fontsize=9)
             
-            self.figure.tight_layout()
+            self.figure.tight_layout(rect=[0, 0.06, 1, 1])
+
+            if metadata:
+                self._add_metadata_footer(metadata)
+
             logger.info(f"Created histogram with {bin_count} bins")
             
             return self.figure
@@ -331,3 +336,35 @@ class ParticlePlotter:
         logger.warning("update_bin_count is deprecated - use create_histogram instead")
         return self.create_histogram(size_data, frequency_data, new_bin_count, 
                                    show_stats_lines=show_stats_lines)
+    
+    def _add_metadata_footer(self, metadata: Dict[str, Any]) -> None:
+        """Add metadata text footer below the plot."""
+        # Build metadata string
+        parts = []
+        
+        if metadata.get('serial_number'):
+            parts.append(f"S/N: {metadata['serial_number']}")
+        
+        if metadata.get('bead_size'):
+            parts.append(f"Bead: {metadata['bead_size']} μm")
+        
+        if metadata.get('filename'):
+            parts.append(f"File: {metadata['filename']}")
+        
+        if metadata.get('timestamp'):
+            parts.append(f"Time: {metadata['timestamp']}")
+        
+        # Material and lot will be added when config system is ready
+        if metadata.get('material'):
+            parts.append(f"Material: {metadata['material']}")
+        
+        if metadata.get('lot_number'):
+            parts.append(f"Lot: {metadata['lot_number']}")
+        
+        if parts:
+            metadata_text = " | ".join(parts)
+            # Place text at bottom center, outside the axes
+            self.figure.text(0.5, 0.005, metadata_text, 
+                            ha='center', va='bottom',
+                            fontsize=8, style='italic',
+                            bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.3))
