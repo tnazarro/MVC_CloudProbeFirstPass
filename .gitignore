@@ -8,3 +8,4 @@ reports/__pycache__/
 reports/templates/__pycache__/
 core/__init__.pyc
 gui/dialogs/__pycache__/
+config.json
