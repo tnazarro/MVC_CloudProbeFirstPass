@@ -18,6 +18,7 @@ class DatasetManager:
     def __init__(self):
         self.datasets: Dict[str, Dict[str, Any]] = {}
         self.active_dataset_id: Optional[str] = None
+        self.instrument_serial_number: str = "" 
         self._color_palette = [
             '#FF6B6B',  # Red
             '#4ECDC4',  # Teal  
@@ -261,7 +262,8 @@ class DatasetManager:
         self.datasets.clear()
         self.active_dataset_id = None
         self._next_color_index = 0
-        logger.info("Cleared all datasets")
+        self.instrument_serial_number = ""  # Reset for new session
+        logger.info("Cleared all datasets and session data")
 
     def get_dataset_order_by_id(self) -> List[str]:
         """Get dataset IDs in their current order."""
