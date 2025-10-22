@@ -10,6 +10,23 @@ from config.constants import SIZE_COLUMN_NAMES, FREQUENCY_COLUMN_NAMES, RANDOM_D
 
 logger = logging.getLogger(__name__)
 
+# Supported instruments from requirements document
+SUPPORTED_INSTRUMENTS = {
+    'CDP', 'FM-100', 'FM-120', 'CAS', 'CAS-DPOL', 
+    'BCPD', 'BCP', 'GFAS'
+}
+
+# Filename prefix to instrument name mapping
+FILENAME_PREFIX_MAP = {
+    'CDP': 'CDP',
+    'FM': 'FM-120',
+    'FOG': 'FM-120',
+    'CAS': 'CAS',
+    'BCPD': 'BCPD',
+    'BCP': 'BCP',
+    'GFAS': 'GFAS'
+}
+
 class ParticleDataProcessor:
     """Handles loading and processing of particle sizing data."""
     
@@ -18,7 +35,12 @@ class ParticleDataProcessor:
         self.size_column = None
         self.frequency_column = None
         self.data_mode = "raw_measurements"  # "pre_aggregated" or "raw_measurements"
-        self.instrument_type = "Unknown"
+        self.instrument_info = {
+            'name': 'Unknown',
+            'version': None,
+            'pads_version': None,
+            'detection_method': None
+        }
     
     def detect_instrument_type(self, file_path: str, max_lines: int = 15) -> str:
         """
@@ -74,14 +96,30 @@ class ParticleDataProcessor:
         """
         Get the detected or set instrument type.
         """
-        return self.instrument_type
+        return self.instrument_info['name']
     
-    def set_instrument_type(self, instrument_type: str) -> None:
+    def get_instrument_info(self) -> dict:
         """
-        Manually set the instrument type (for future editability).
+        Get the full instrument information dictionary.
+        
+        Returns:
+            dict with keys: name, version, pads_version, detection_method
         """
-        self.instrument_type = instrument_type.strip()
-        logger.info(f"Instrument type manually set to: {self.instrument_type}")
+        return self.instrument_info.copy()
+
+    def set_instrument_type(self, instrument_type: str, version: str = None) -> None:
+        """
+        Manually set the instrument type and optionally version.
+        
+        Args:
+            instrument_type: Instrument name
+            version: Optional instrument version
+        """
+        self.instrument_info['name'] = instrument_type.strip()
+        if version:
+            self.instrument_info['version'] = version.strip()
+        self.instrument_info['detection_method'] = 'manual'
+        logger.info(f"Instrument type manually set to: {instrument_type}")
 
     def _parse_csv_metadata(self, file_path: str) -> Dict[str, Any]:
         """
