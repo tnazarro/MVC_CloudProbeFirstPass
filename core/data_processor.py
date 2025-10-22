@@ -5,12 +5,14 @@ Data processing module for particle sizing data.
 import pandas as pd
 import numpy as np
 import logging
+import os
 from typing import Tuple, List, Optional, Dict, Any
 from config.constants import SIZE_COLUMN_NAMES, FREQUENCY_COLUMN_NAMES, RANDOM_DATA_BOUNDS, SUPPORTED_CSV_ENCODINGS
 
 logger = logging.getLogger(__name__)
 
 # Supported instruments from requirements document
+#Not sure if it's better here, or in constants.py
 SUPPORTED_INSTRUMENTS = {
     'CDP', 'FM-100', 'FM-120', 'CAS', 'CAS-DPOL', 
     'BCPD', 'BCP', 'GFAS'
@@ -42,55 +44,114 @@ class ParticleDataProcessor:
             'detection_method': None
         }
     
-    def detect_instrument_type(self, file_path: str, max_lines: int = 15) -> str:
+    def detect_instrument_type(self, file_path: str, max_lines: int = 60) -> dict:
         """
-        Detect instrument type from CSV file by looking for "Instrument Type =" line.
+        Detect instrument type using multiple strategies:
+        1. Look for "Instrument Type=" pattern (most declarative)
+        2. Look for "<instrument> version =" pattern (PADS format)
+        3. Extract from filename as fallback
+        
+        Scans all lines up to max_lines to collect name, version, and PADS version.
         
         Args:
             file_path: Path to the CSV file
-            max_lines: Maximum number of lines to search through
+            max_lines: Maximum number of lines to search through (default 60 to catch CDP metadata)
             
         Returns:
-            str: Detected instrument type or "Unknown" if not found
+            dict: Instrument information with keys:
+                - name: Instrument name (e.g., "CAS DPOL")
+                - version: Instrument version if found (e.g., "4.03.06")
+                - pads_version: PADS version if found
+                - detection_method: How instrument was detected
         """
+        
+        result = {
+            'name': 'Unknown',
+            'version': None,
+            'pads_version': None,
+            'detection_method': None
+        }
+        
         for encoding in SUPPORTED_CSV_ENCODINGS:
             try:
                 with open(file_path, 'r', encoding=encoding) as f:
-                    for line_num, line in enumerate(f):
-                        if line_num >= max_lines:
-                            break
-                        
-                        # Look for "Instrument Type=" (case-insensitive)
-                        line_clean = line.strip()
-                        if "instrument type=" in line_clean.lower():
-                            # Extract the part after "Instrument Type="
-                            parts = line_clean.split('=', 1)
-                            if len(parts) > 1:
-                                instrument_type = parts[1].strip()
-                                # Remove any quotes or extra whitespace
-                                instrument_type = instrument_type.strip('"\'')
-                                
-                                if instrument_type:
-                                    logger.info(f"Detected instrument type: {instrument_type}")
-                                    self.instrument_type = instrument_type
-                                    return instrument_type
+                    lines = [f.readline() for _ in range(max_lines)]
                 
-                # If we get here, we successfully read the file but didn't find the instrument type
-                logger.info(f"Instrument type not found in first {max_lines} lines of file")
-                self.instrument_type = "Unknown"
-                return "Unknown"
+                # Scan all lines to collect all available information
+                for line_num, line in enumerate(lines):
+                    line_clean = line.strip()
+                    line_lower = line_clean.lower()
+                    
+                    # Check for PADS version (always capture this)
+                    if "pads version" in line_lower and "=" in line_clean:
+                        parts = line_clean.split('=', 1)
+                        if len(parts) > 1:
+                            result['pads_version'] = parts[1].strip()
+                        continue
+                    
+                    # Strategy 1: Look for "Instrument Type=" (most declarative)
+                    if "instrument type=" in line_lower and result['name'] == 'Unknown':
+                        parts = line_clean.split('=', 1)
+                        if len(parts) > 1:
+                            instrument_name = parts[1].strip().strip('"\'')
+                            if instrument_name:
+                                result['name'] = instrument_name
+                                result['detection_method'] = 'explicit_declaration'
+                                logger.info(f"Detected instrument type (explicit): {instrument_name}")
+                    
+                    # Strategy 2: Look for "<instrument> version =" pattern
+                    elif "version" in line_lower and "=" in line_clean and result['name'] == 'Unknown':
+                        version_index = line_lower.find("version")
+                        potential_name = line_clean[:version_index].strip()
+                        
+                        # Validate it's a known instrument (case-insensitive match)
+                        name_upper = potential_name.upper()
+                        for supported in SUPPORTED_INSTRUMENTS:
+                            supported_upper = supported.upper()
+                            # Check if the supported instrument name is in the potential name
+                            # This handles cases like "CDP PBP version" or "BCPD Beta version"
+                            if supported_upper in name_upper:
+                                # Extract version number
+                                parts = line_clean.split('=', 1)
+                                if len(parts) > 1:
+                                    version = parts[1].strip()
+                                    # Use the canonical name from SUPPORTED_INSTRUMENTS
+                                    result['name'] = supported
+                                    result['version'] = version
+                                    result['detection_method'] = 'version_pattern'
+                                    logger.info(f"Detected instrument type (version pattern): {supported} v{version}")
+                                    break
+                
+                # After scanning all lines, if we found something, return it
+                if result['name'] != 'Unknown':
+                    self.instrument_info = result
+                    return result
+                
+                # Strategy 3: Parse from filename as fallback
+                filename = os.path.basename(file_path)
+                filename_upper = filename.upper()
+                
+                for prefix, instrument_name in FILENAME_PREFIX_MAP.items():
+                    if filename_upper.startswith(prefix.upper()):
+                        result['name'] = instrument_name
+                        result['detection_method'] = 'filename_pattern'
+                        logger.info(f"Detected instrument type (filename): {instrument_name}")
+                        self.instrument_info = result
+                        return result
+                
+                logger.info(f"Instrument type not found in first {max_lines} lines or filename")
+                self.instrument_info = result
+                return result
                 
             except UnicodeDecodeError:
-                # Try next encoding
                 continue
             except Exception as e:
                 logger.warning(f"Error detecting instrument type with encoding {encoding}: {e}")
                 continue
         
-        # If all encodings failed
-        logger.warning(f"Failed to detect instrument type with any supported encoding")
-        self.instrument_type = "Unknown"
-        return "Unknown"
+        logger.warning("Failed to detect instrument type with any supported encoding")
+        self.instrument_info = result
+        return result
 
     def get_instrument_type(self) -> str:
         """
@@ -319,7 +380,9 @@ class ParticleDataProcessor:
             'total_rows': len(self.data),
             'total_columns': len(self.data.columns),
             'data_mode': self.data_mode,
-            'instrument_type': self.instrument_type 
+            'instrument_type': self.instrument_info['name'],
+            'instrument_version': self.instrument_info.get('version'),
+            'pads_version': self.instrument_info.get('pads_version')
         }
         
         if self.size_column:
@@ -407,8 +470,13 @@ class ParticleDataProcessor:
             
             logger.info(f"Generating {n} random data points with {distribution} distribution")
             
-            # Set instrument type for generated data
-            self.instrument_type = "Generated Data"
+            # Set instrument type for generated data (deprecated, but kept for compatibility)
+            self.instrument_info = {
+                'name': 'Generated Data',
+                'version': None,
+                'pads_version': None,
+                'detection_method': 'generated'
+            }
             
             # Generate size data based on distribution type
             if distribution == 'lognormal':
