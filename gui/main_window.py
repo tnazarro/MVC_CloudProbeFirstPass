@@ -154,13 +154,13 @@ class MainWindow:
         self.skip_rows_var = tk.IntVar(value=0)
         
 
-        # New variable for gaussian fit
+        # Variable for gaussian fit
         self.show_gaussian_fit_var = tk.BooleanVar(value=True)
 
         # Analysis mode selection variable (calibration vs verification)
         self.analysis_mode_var = tk.StringVar(value='calibration')
         
-        # NEW: Inline tag editing variable
+        # Inline tag editing variable
         self.current_tag_var = tk.StringVar()
         self._updating_tag = False  # Flag to prevent recursive updates
         
@@ -2070,10 +2070,17 @@ For more detailed help, please refer to the user manual or contact support."""
             messagebox.showerror("Error", "No active dataset for report generation.")
             return
         
+        # Generate default filename with instrument type, serial number, and timestamp
+        instrument_type = active_dataset['data_processor'].get_instrument_type()
+        serial_number = self.dataset_manager.instrument_serial_number or "UNKNOWN"
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+        default_filename = f"{instrument_type}_{serial_number}_verification_{timestamp}.pdf"
+
         # Get save location from user
         file_path = filedialog.asksaveasfilename(
             title="Save Report As",
             defaultextension=".pdf",
+            initialfile=default_filename,
             filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")]
         )
         
