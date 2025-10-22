@@ -128,8 +128,7 @@ class ParticleDataProcessor:
                     return result
                 
                 # Strategy 3: Parse from filename as fallback
-                filename = os.path.basename(file_path)
-                filename_upper = filename.upper()
+                filename_upper = os.path.basename(file_path).upper()
                 
                 for prefix, instrument_name in FILENAME_PREFIX_MAP.items():
                     if filename_upper.startswith(prefix.upper()):
