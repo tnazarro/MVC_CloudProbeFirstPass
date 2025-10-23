@@ -1833,7 +1833,7 @@ For more detailed help, please refer to the user manual or contact support."""
         # Dataset info
         stats_str = f"Dataset: {active_dataset['tag']}\n"
         stats_str += f"File: {active_dataset['filename']}\n"
-        stats_str += f"Instrument: {stats.get('instrument_type', 'Unknown')}\n"
+        stats_str += f"Instrument: {stats.get('instrument_info', {}).get('name', 'Unknown')}\n"
         stats_str += f"Serial Number: {self.dataset_manager.instrument_serial_number or 'Not set'}\n"
         stats_str += f"Rows: {stats.get('total_rows', 'N/A')}\n"
         stats_str += f"Columns: {stats.get('total_columns', 'N/A')}\n"
