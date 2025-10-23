@@ -410,15 +410,10 @@ class MainWindow:
         )
         self.gaussian_info_btn.grid(row=9, column=2, sticky='w', padx=(10,0), pady=2)
 
-        # Plot button (all row numbers updated)
-        self.plot_button = ttk.Button(self.control_frame, text="Create Plot", 
-                                     command=self.create_plot, state='disabled')
-        self.plot_button.grid(row=10, column=0, columnspan=2, sticky='ew', pady=10)
-        
         # Report generation button - will be mode-restricted
         self.report_button = ttk.Button(self.control_frame, text="Generate Report", 
                                        command=self.generate_report, state='disabled')
-        self.report_button.grid(row=11, column=0, columnspan=2, sticky='ew', pady=5)
+        self.report_button.grid(row=10, column=0, columnspan=2, sticky='ew', pady=5)
         
         # Show/hide report button based on availability
         if not REPORTS_AVAILABLE:
@@ -503,7 +498,7 @@ class MainWindow:
         
         # Initially show a message when no plot exists
         self.no_plot_label = ttk.Label(plot_content_frame, 
-                                      text="No plot to display\nLoad data and click 'Create Plot' to begin",
+                                      text="No plot to display\nLoad data to begin",
                                       font=('TkDefaultFont', 10),
                                       foreground='gray',
                                       justify='center')
@@ -812,8 +807,11 @@ class MainWindow:
                 self._load_active_dataset_settings()
                 self._update_column_combos()
                 self._update_stats_display()
-                self.plot_button.config(state='normal')
                 self._update_report_button_state()
+                
+                # Auto-create first plot if none exists
+                if not hasattr(self, 'canvas'):
+                    self.create_plot()
                 
                 # Update scroll region after adding dataset
                 self.scrollable_frame.update_scroll_region()
@@ -929,8 +927,11 @@ class MainWindow:
                 self._load_active_dataset_settings()
                 self._update_column_combos()
                 self._update_stats_display()
-                self.plot_button.config(state='normal')
                 self._update_report_button_state()
+                
+                # Auto-create first plot if none exists
+                if not hasattr(self, 'canvas'):
+                    self.create_plot()
                 
                 # Update scroll region after adding dataset
                 self.scrollable_frame.update_scroll_region()
@@ -1020,10 +1021,6 @@ class MainWindow:
         self.root.bind('<Control-o>', lambda e: self._load_for_calibration())
         self.root.bind('<Control-Shift-O>', lambda e: self._load_for_verification())
         
-        # Plot creation shortcuts
-        self.root.bind('<Return>', self._handle_return_key)
-        self.root.bind('<space>', self._handle_space_key)
-        
         # Dataset navigation shortcuts
         self.root.bind('<Up>', lambda e: self._navigate_dataset_previous())
         self.root.bind('<Down>', lambda e: self._navigate_dataset_next())
@@ -1032,22 +1029,6 @@ class MainWindow:
         
         # Make sure the main window can receive focus for keyboard events
         self.root.focus_set()
-
-    def _handle_return_key(self, event):
-        """Handle Return key - only create plot if not in text widget."""
-        focused_widget = self.root.focus_get()
-        if not self._is_text_input_widget(focused_widget):
-            if self.plot_button['state'] == 'normal':
-                self.create_plot()
-            return 'break'
-
-    def _handle_space_key(self, event):
-        """Handle Space key - only create plot if not in text widget."""
-        focused_widget = self.root.focus_get()
-        if not self._is_text_input_widget(focused_widget):
-            if self.plot_button['state'] == 'normal':
-                self.create_plot()
-            return 'break'
 
     def _is_text_input_widget(self, widget):
         """Check if widget is a text input that should handle keys normally."""
@@ -1657,8 +1638,6 @@ For more detailed help, please refer to the user manual or contact support."""
         for item in self.dataset_treeview.get_children():
             self.dataset_treeview.delete(item)
         
-        # Disable plot button
-        self.plot_button.config(state='disabled')
         self._update_report_button_state()
         self._update_navigation_buttons_for_mode()  # Update navigation buttons including save graph
         
@@ -1677,7 +1656,7 @@ For more detailed help, please refer to the user manual or contact support."""
                 plot_content_frame = ttk.Frame(self.plot_frame)
                 plot_content_frame.pack(fill='both', expand=True)
                 self.no_plot_label = ttk.Label(plot_content_frame, 
-                                              text="No plot to display\nLoad data and click 'Create Plot' to begin",
+                                              text="No plot to display\nLoad data to begin",
                                               font=('TkDefaultFont', 10),
                                               foreground='gray',
                                               justify='center')
