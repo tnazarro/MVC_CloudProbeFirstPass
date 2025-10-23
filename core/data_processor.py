@@ -379,9 +379,7 @@ class ParticleDataProcessor:
             'total_rows': len(self.data),
             'total_columns': len(self.data.columns),
             'data_mode': self.data_mode,
-            'instrument_type': self.instrument_info['name'],
-            'instrument_version': self.instrument_info.get('version'),
-            'pads_version': self.instrument_info.get('pads_version')
+            'instrument_info': self.instrument_info
         }
         
         if self.size_column:
