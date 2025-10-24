@@ -933,7 +933,7 @@ class MainWindow:
             # Insert item with tag and filename in separate columns
             item_id = self.dataset_list_panel.treeview.insert(
                 '', 'end',
-                text='•',  # Bullet point in the tree column
+                text='•',
                 values=(dataset['tag'], filename_display),
                 tags=('dataset',)
             )
@@ -1197,9 +1197,9 @@ class MainWindow:
         
         # Parameters with uncertainties
         params_data = [
-            ['Peak Location (μ)', f"{params['mean']:.4f} Â± {param_errors['mean_error']:.4f}"],
-            ['Standard Deviation (σ)', f"{params['stddev']:.4f} Â± {param_errors['stddev_error']:.4f}"],
-            ['Peak Height (A)', f"{params['amplitude']:.2f} Â± {param_errors['amplitude_error']:.2f}"],
+            ['Peak Location (μ)', f"{params['mean']:.4f} ± {param_errors['mean_error']:.4f}"],
+            ['Standard Deviation (σ)', f"{params['stddev']:.4f} ± {param_errors['stddev_error']:.4f}"],
+            ['Peak Height (A)', f"{params['amplitude']:.2f} ± {param_errors['amplitude_error']:.2f}"],
             ['Full Width Half Max', f"{fit_result['statistics']['fwhm']:.4f}"],
             ['Area Under Curve', f"{fit_result['statistics']['area_under_curve']:.2f}"],
             ['Mode Bin Center', f"{fit_result['statistics']['mode_bin_center']:.4f}"],
@@ -1260,7 +1260,7 @@ class MainWindow:
             ['Root Mean Square Error', f"{quality['rmse']:.4f}"],
             ['Mean Absolute Error', f"{quality['mae']:.4f}"],
             ['Normalized RMSE (%)', f"{quality['nrmse_percent']:.2f}%"],
-            ['Chi-squared (Ï‡²)', f"{quality['chi_squared']:.4f}"],
+            ['Chi-squared (χ²)', f"{quality['chi_squared']:.4f}"],
             ['Reduced Chi-squared', f"{quality['reduced_chi_squared']:.4f}"],
             ['Degrees of Freedom', f"{quality['degrees_of_freedom']}"]
         ]
@@ -1308,8 +1308,8 @@ class MainWindow:
     Substituted:
     y = {params['amplitude']:.4f} × exp(-((x - {params['mean']:.4f})² / (2 × {params['stddev']:.4f}²)))
 
-    68% of data lies within μ Â± σ = [{params['mean'] - params['stddev']:.3f}, {params['mean'] + params['stddev']:.3f}]
-    95% of data lies within μ Â± 2σ = [{params['mean'] - 2*params['stddev']:.3f}, {params['mean'] + 2*params['stddev']:.3f}]"""
+    68% of data lies within μ ± σ = [{params['mean'] - params['stddev']:.3f}, {params['mean'] + params['stddev']:.3f}]
+    95% of data lies within μ ± 2σ = [{params['mean'] - 2*params['stddev']:.3f}, {params['mean'] + 2*params['stddev']:.3f}]"""
         
         equation_label = tk.Text(equation_frame, wrap='word', height=15, width=60, 
                                 font=FONT_PREVIEW_TEXT)
