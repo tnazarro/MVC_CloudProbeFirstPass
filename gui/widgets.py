@@ -383,19 +383,10 @@ class ActionButtonsPanel(ttk.Frame):
     """Panel containing plot and report action buttons."""
     
     def __init__(self, parent,
-                 on_plot: Callable,
                  on_report: Callable,
                  reports_available: bool,
                  **kwargs):
         super().__init__(parent, **kwargs)
-        
-        self.plot_button = ttk.Button(
-            self,
-            text="Create Plot",
-            command=on_plot,
-            state='disabled'
-        )
-        self.plot_button.pack(fill='x', pady=(10, 5))
         
         self.report_button = ttk.Button(
             self,
@@ -404,3 +395,37 @@ class ActionButtonsPanel(ttk.Frame):
             state='disabled'
         )
         self.report_button.pack(fill='x', pady=5)
+
+class PlotNavigationPanel(ttk.Frame):
+    """Panel containing plot navigation and save controls."""
+    
+    def __init__(self, parent,
+                 on_previous: Callable,
+                 on_next: Callable,
+                 on_save: Callable,
+                 **kwargs):
+        super().__init__(parent, **kwargs)
+        
+        self.prev_btn = ttk.Button(
+            self,
+            text="◀ Previous Dataset",
+            command=on_previous,
+            state='disabled'
+        )
+        self.prev_btn.pack(side='left')
+        
+        self.save_btn = ttk.Button(
+            self,
+            text="💾 Save Graph",
+            command=on_save,
+            state='disabled'
+        )
+        self.save_btn.pack(side='left', expand=True)
+        
+        self.next_btn = ttk.Button(
+            self,
+            text="Next Dataset ▶",
+            command=on_next,
+            state='disabled'
+        )
+        self.next_btn.pack(side='right')
