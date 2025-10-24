@@ -107,7 +107,7 @@ class FilePreviewDialog:
         
         if self.cached_file_metadata['success']:
             # Cache the detected instrument type to avoid re-detection
-            self.cached_instrument_type = self.cached_file_metadata.get('instrument_type', 'Unknown')
+            self.cached_instrument_type = self.cached_file_metadata.get('instrument_info', {}).get('name', 'Unknown')
             logger.info(f"Cached instrument type: {self.cached_instrument_type}")
         else:
             self.cached_instrument_type = 'Unknown'
