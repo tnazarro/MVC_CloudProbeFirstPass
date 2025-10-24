@@ -802,19 +802,7 @@ class MainWindow:
                 # Set as active dataset
                 self.dataset_manager.set_active_dataset(dataset_id)
                 
-                # Update UI
-                self._update_dataset_ui()
-                self._load_active_dataset_settings()
-                self._update_column_combos()
-                self._update_stats_display()
-                self._update_report_button_state()
-                
-                # Auto-create first plot if none exists
-                if not hasattr(self, 'canvas'):
-                    self.create_plot()
-                
-                # Update scroll region after adding dataset
-                self.scrollable_frame.update_scroll_region()
+                self._update_UI(self)
                 
                 if skip_rows > 0:
                     messagebox.showinfo("Success", f"Dataset '{tag}' loaded successfully!\nSkipped {skip_rows} rows.")
@@ -922,20 +910,8 @@ class MainWindow:
                 self.file_queue.mark_current_processed(dataset_id)
                 self.dataset_manager.set_active_dataset(dataset_id)
                 
-                # Update UI
-                self._update_dataset_ui()
-                self._load_active_dataset_settings()
-                self._update_column_combos()
-                self._update_stats_display()
-                self._update_report_button_state()
-                
-                # Auto-create first plot if none exists
-                if not hasattr(self, 'canvas'):
-                    self.create_plot()
-                
-                # Update scroll region after adding dataset
-                self.scrollable_frame.update_scroll_region()
-                
+                self._update_UI(self)
+
                 logger.info(f"Successfully loaded queue file: {tag}")
                 self._process_current_queue_file()  # Continue with next file
                 
@@ -964,6 +940,21 @@ class MainWindow:
                 self._process_current_queue_file()
             else:
                 self._cancel_queue_processing()
+
+    def _update_UI(self):
+        """Update UI elements after queue file load."""
+        self._update_dataset_ui()
+        self._load_active_dataset_settings()
+        self._update_column_combos()
+        self._update_stats_display()
+        self._update_report_button_state()
+
+        #Also auto-create first plot if none exists
+        if not hasattr(self, 'canvas'):
+            self.create_plot()
+
+        # Update scroll region after adding dataset
+        self.scrollable_frame.update_scroll_region()
 
     def _on_queue_skip(self):
         """Handle skip button in queue processing."""
