@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 # Supported instruments from requirements document
 #Not sure if it's better here, or in constants.py
 SUPPORTED_INSTRUMENTS = {
-    'CDP', 'FM-100', 'FM-120', 'CAS', 'CAS-DPOL', 
+    'CDP', 'FM-100', 'FM 100', 'FM-120', 'FM 120', 'CAS', 'CAS-DPOL', 'CAS DPOL' 
     'BCPD', 'BCP', 'GFAS'
 }
 
@@ -217,7 +217,7 @@ class ParticleDataProcessor:
                     'encoding': encoding,
                     'total_lines': total_lines,
                     'sample_columns': sample_columns,
-                    'instrument_type': detected_instrument
+                    'instrument_info': detected_instrument
                 }
                 
             except UnicodeDecodeError:
@@ -233,7 +233,7 @@ class ParticleDataProcessor:
         return {
             'success': False,
             'error': error_msg,
-            'instrument_type': "Unknown"
+            'instrument_info': {'name': 'Unknown', 'version': None, 'pads_version': None, 'detection_method': None}
         }
 
     def load_csv(self, file_path: str, skip_rows: int = 0) -> bool:
@@ -421,7 +421,7 @@ class ParticleDataProcessor:
             return {
                 'success': False,
                 'error': metadata['error'],
-                'instrument_type': metadata.get('instrument_type', 'Unknown')
+                'instrument_type': metadata.get('instrument_info', {}).get('name', 'Unknown')
             }
         
         # Use the detected encoding to read preview lines
@@ -439,7 +439,7 @@ class ParticleDataProcessor:
                 'detected_columns': len(metadata['sample_columns']),
                 'column_names': metadata['sample_columns'],
                 'encoding_used': encoding,
-                'instrument_type': metadata['instrument_type']
+                'instrument_type': metadata['instrument_info']['name']
             }
             
         except Exception as e:
@@ -447,7 +447,7 @@ class ParticleDataProcessor:
             return {
                 'success': False,
                 'error': f"Failed to read preview lines: {str(e)}",
-                'instrument_type': metadata.get('instrument_type', 'Unknown')
+                'instrument_type': metadata.get('instrument_info', {}).get('name', 'Unknown')
             }
     
     def generate_random_data(self, n: int = None, distribution: str = 'lognormal') -> bool:
