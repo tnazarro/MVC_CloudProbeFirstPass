@@ -22,6 +22,7 @@ from core.data_processor import ParticleDataProcessor
 from core.dataset_manager import DatasetManager
 from core.plotter import ParticlePlotter
 from config.constants import *
+from gui.widgets import *
 from core.file_queue import FileQueue
 from gui.dialogs.file_preview import FilePreviewDialog
 from gui.dialogs.load_choice import LoadChoiceDialog
@@ -192,245 +193,88 @@ class MainWindow:
         self._setup_keyboard_shortcuts()
     
     def _create_widgets(self):
-        """Create all GUI widgets."""
-        # Main frame (no longer needed - keeping for compatibility but not used)
-        self.main_frame = ttk.Frame(self.root)
-        
-        # Control frame (left side) - now goes inside scrollable frame
+        """Create all GUI widgets using container panels."""
+        # Control frame (left side) - goes inside scrollable frame
         self.control_frame = ttk.LabelFrame(self.scrollable_frame.scrollable_frame, text="Controls", padding=10)
         
-        self.load_buttons_frame = ttk.LabelFrame(self.control_frame, text="Analysis Mode", padding=5)
-        self.load_buttons_frame.grid(row=0, column=0, columnspan=3, sticky='ew', pady=(0,10))
-        
-        # Two direct load buttons
-        buttons_container = ttk.Frame(self.load_buttons_frame)
-        buttons_container.pack(fill='x', pady=(0,5))
-        
-        self.calibration_load_button = ttk.Button(
-            buttons_container, 
-            text="Load for Calibration", 
-            command=self._load_for_calibration
+        # Analysis Mode Panel
+        self.analysis_mode_panel = AnalysisModePanel(
+            self.control_frame,
+            on_load_calibration=self._load_for_calibration,
+            on_load_verification=self._load_for_verification,
+            serial_var=self.serial_var
         )
-        self.calibration_load_button.pack(side='left', padx=(0,10), fill='x', expand=True)
+        self.analysis_mode_panel.pack(fill='x', pady=(0, 10))
         
-        self.verification_load_button = ttk.Button(
-            buttons_container, 
-            text="Load for Verification", 
-            command=self._load_for_verification
+        # Queue Status Panel
+        self.queue_status_panel = QueueStatusPanel(
+            self.control_frame,
+            font_style=FONT_STATUS
         )
-        self.verification_load_button.pack(side='left', fill='x', expand=True)
+        self.queue_status_panel.pack(fill='x', pady=2)
         
-        # Mode description label
-        self.mode_description = ttk.Label(
-            self.load_buttons_frame, 
-            text="Current Mode: Calibration (Single dataset analysis)",
-            font=FONT_HINT_TEXT,
-            foreground='blue'
+        # Dataset List Panel (includes treeview, tag editor)
+        self.dataset_list_panel = DatasetListPanel(
+            self.control_frame,
+            current_tag_var=self.current_tag_var,
+            on_dataset_select=self._on_dataset_select,
+            on_tag_save=self._save_current_tag,
+            on_dataset_reorder=self._handle_dataset_reorder,
+            validate_float_func=self.validate_float,
+            treeview_height=8
         )
-        self.mode_description.pack(anchor='w', pady=(5,0))
+        self.dataset_list_panel.pack(fill='x', pady=(10, 10))
         
-        # Serial number input (session-level for all datasets)
-        self.serial_frame = ttk.Frame(self.load_buttons_frame)
-        self.serial_frame.pack(fill='x', pady=(10,0))
-
-        ttk.Label(self.serial_frame, text="Instrument Serial Number:").pack(side='left', padx=(0,5))
-
-        self.serial_var = tk.StringVar(value=self.dataset_manager.instrument_serial_number)
-        self.serial_entry = ttk.Entry(self.serial_frame, textvariable=self.serial_var, width=20)
-        self.serial_entry.pack(side='left')
-
-        # Bind to update manager when changed
-        self.serial_var.trace_add('write', self._on_serial_number_change)
-
-        # Queue status display
-        self.queue_status_frame = ttk.Frame(self.control_frame)
-        self.queue_status_frame.grid(row=1, column=0, columnspan=3, sticky='ew', pady=2)
-        
-        self.queue_status_label = ttk.Label(self.queue_status_frame, text="", font=FONT_STATUS)
-        self.queue_status_label.pack(anchor='w')
-        
-        # === LOADED DATASETS FRAME ===
-        self.dataset_list_frame = ttk.LabelFrame(self.control_frame, text="Loaded Datasets", padding=5)
-        self.dataset_list_frame.grid(row=2, column=0, columnspan=3, sticky='ew', pady=(10,10)) 
-        
-        # Dataset treeview with scrollbar - REDUCED HEIGHT to 8 rows with separate columns
-        list_container = ttk.Frame(self.dataset_list_frame)
-        list_container.pack(fill='x', pady=(0,5))  # Changed from fill='both', expand=True
-        
-        # Create Treeview with columns for Tag and Filename
-        self.dataset_treeview = ttk.Treeview(
-            list_container, 
-            columns=('tag', 'filename'), 
-            show='tree headings',  # Show both tree and headings
-            height=8,  # REDUCED to 8 rows (was 10) to fit in left column
-            selectmode='browse'  # Single selection
+        # Dataset Management Panel
+        self.dataset_mgmt_panel = DatasetManagementPanel(
+            self.control_frame,
+            on_reset_config=self.reset_to_config_defaults,
+            on_edit_notes=self.edit_dataset_notes,
+            on_remove=self.remove_dataset,
+            on_help=self.show_help_dialog
         )
+        self.dataset_mgmt_panel.pack(fill='x', pady=5)
         
-        # Configure columns
-        self.dataset_treeview.heading('#0', text='')  # Hide the tree column header
-        self.dataset_treeview.heading('tag', text='Bead Size (μm)')
-        self.dataset_treeview.heading('filename', text='Filename')
-        
-        # Set column widths - adjusted for narrower left column
-        self.dataset_treeview.column('#0', width=15, minwidth=15, stretch=False)  # Smaller tree column for bullet
-        self.dataset_treeview.column('tag', width=80, minwidth=60, stretch=True)  # Narrower tag column
-        self.dataset_treeview.column('filename', width=120, minwidth=80, stretch=True)  # Narrower filename column
-        
-        # Scrollbars
-        dataset_scrollbar_y = ttk.Scrollbar(list_container, orient='vertical', command=self.dataset_treeview.yview)
-        dataset_scrollbar_x = ttk.Scrollbar(list_container, orient='horizontal', command=self.dataset_treeview.xview)
-        
-        self.dataset_treeview.configure(yscrollcommand=dataset_scrollbar_y.set, xscrollcommand=dataset_scrollbar_x.set)
-        self.dataset_treeview.bind('<ButtonPress-1>', self._on_treeview_button_press)
-        self.dataset_treeview.bind('<B1-Motion>', self._on_treeview_drag_motion)
-        self.dataset_treeview.bind('<ButtonRelease-1>', self._on_treeview_button_release)
-        self.dataset_treeview.bind('<<TreeviewSelect>>', self._on_dataset_select)
-        
-        # Grid layout for treeview and scrollbars
-        self.dataset_treeview.grid(row=0, column=0, sticky='nsew')
-        dataset_scrollbar_y.grid(row=0, column=1, sticky='ns')
-        dataset_scrollbar_x.grid(row=1, column=0, sticky='ew')
-        
-        list_container.grid_rowconfigure(0, weight=1)
-        list_container.grid_columnconfigure(0, weight=1)
-        
-        # === INLINE TAG EDITOR ===
-        tag_editor_frame = ttk.LabelFrame(self.dataset_list_frame, text="Bead Size (μm)", padding=5)
-        tag_editor_frame.pack(fill='x', pady=(0,5))
-
-        # Tag entry with label
-        tag_entry_container = ttk.Frame(tag_editor_frame)
-        tag_entry_container.pack(fill='x')
-
-        ttk.Label(tag_entry_container, text="Bead Size (μm):").pack(side='left', padx=(0,5))
-
-        # Register validation function for float-only input
-        self.validate_float = self.root.register(self._validate_float_input)
-
-        self.tag_entry = ttk.Entry(
-            tag_entry_container, 
-            textvariable=self.current_tag_var,
-            state='disabled',  # Start disabled until dataset is selected
-            validate='key',    # Validate on every keystroke
-            validatecommand=(self.validate_float, '%P')  # %P = new value after keystroke
+        # Stats Panel
+        self.stats_panel = StatsPanel(
+            self.control_frame,
+            text_height=8,
+            text_width=30
         )
-        self.tag_entry.pack(side='left', fill='x', expand=True, padx=(0,5))
-
-        # Bind tag entry events (keep existing bindings)
-        self.current_tag_var.trace('w', self._on_tag_var_change)
-        self.tag_entry.bind('<Return>', self._on_tag_entry_return)
-        self.tag_entry.bind('<FocusOut>', self._on_tag_entry_focusout)
-
-        # Quick save button (keep existing)
-        self.tag_save_btn = ttk.Button(
-            tag_entry_container, 
-            text="💾", 
-            width=3,
-            command=self._save_current_tag,
-            state='disabled'
+        self.stats_panel.pack(fill='x', pady=5)
+        
+        # Analysis Controls Panel
+        self.analysis_controls_panel = AnalysisControlsPanel(
+            self.control_frame,
+            size_column_var=self.size_column_var,
+            bin_count_var=self.bin_count_var,
+            on_column_change=self._on_column_change,
+            on_bin_change=self._on_bin_entry_change,
+            on_gaussian_info=self.show_gaussian_info,
+            min_bins=MIN_BIN_COUNT,
+            max_bins=MAX_BIN_COUNT
         )
-        self.tag_save_btn.pack(side='right')
+        self.analysis_controls_panel.pack(fill='x', pady=5)
         
-        # === DATASET MANAGEMENT CONTROLS ===
-        self.dataset_mgmt_frame = ttk.LabelFrame(self.control_frame, text="Dataset Management", padding=5)
-        self.dataset_mgmt_frame.grid(row=4, column=0, columnspan=3, sticky='ew', pady=5)
-        
-        # Dataset actions
-        actions_frame = ttk.Frame(self.dataset_mgmt_frame)
-        actions_frame.pack(fill='x', pady=5)
-
-        self.reset_config_btn = ttk.Button(actions_frame, text="Reset to Config",
-                                           command=self.reset_to_config_defaults, state='disabled')
-        self.reset_config_btn.pack(side='left', padx=(0,5))
-        
-        self.edit_notes_btn = ttk.Button(actions_frame, text="Edit Notes", 
-                                        command=self.edit_dataset_notes, state='disabled')
-        self.edit_notes_btn.pack(side='left', padx=(0,5))
-        
-        self.remove_dataset_btn = ttk.Button(actions_frame, text="Remove", 
-                                            command=self.remove_dataset, state='disabled')
-        self.remove_dataset_btn.pack(side='left', padx=(0,5))
-        
-        # Help button
-        self.help_btn = ttk.Button(actions_frame, text="?", width=3,
-                                  command=self.show_help_dialog)
-        self.help_btn.pack(side='right')
-        
-        # === DATA INFO (stats) ===
-        self.stats_frame = ttk.LabelFrame(self.control_frame, text="Data Info", padding=5)
-        self.stats_frame.grid(row=5, column=0, columnspan=3, sticky='ew', pady=5)
-        
-        self.stats_text = tk.Text(self.stats_frame, height=8, width=30)
-        self.stats_text.pack(fill='both', expand=True)
-        
-        # === DATA ANALYSIS CONTROLS ===
-        ttk.Separator(self.control_frame, orient='horizontal').grid(row=6, column=0, columnspan=3, sticky='ew', pady=5)
-        
-        #Column selection
-        ttk.Label(self.control_frame, text="Size Column:").grid(row=7, column=0, sticky='w', pady=2)
-        self.size_combo = ttk.Combobox(self.control_frame, textvariable=self.size_column_var, 
-                                    state='readonly')
-        self.size_combo.grid(row=7, column=1, sticky='ew', pady=2)
-        self.size_combo.bind('<<ComboboxSelected>>', self._on_column_change)
-
-        self.frequency_label = ttk.Label(self.control_frame, text="Frequency Column:")
-        self.frequency_label.grid(row=7, column=0, sticky='w', pady=2)
-        self.frequency_combo = ttk.Combobox(self.control_frame, textvariable=self.frequency_column_var, 
-                                        state='readonly')
-        self.frequency_combo.grid(row=7, column=1, sticky='ew', pady=2)
-        self.frequency_combo.bind('<<ComboboxSelected>>', self._on_column_change)
-
-        # Bin count control
-        ttk.Label(self.control_frame, text="Bins:").grid(row=8, column=0, sticky='w', pady=2)
-
-        # Create frame for bin controls
-        bin_frame = ttk.Frame(self.control_frame)
-        bin_frame.grid(row=8, column=1, columnspan=2, sticky='ew', pady=2)
-
-        # Bin count entry field only (remove slider)
-        self.bin_entry = ttk.Entry(bin_frame, textvariable=self.bin_count_var, width=8)
-        self.bin_entry.grid(row=0, column=0, sticky='w')
-        self.bin_entry.bind('<Return>', self._on_bin_entry_change)
-        self.bin_entry.bind('<FocusOut>', self._on_bin_entry_change)
-
-        # Optional: Add a label showing the valid range
-        bin_hint_label = ttk.Label(bin_frame, text=f"({MIN_BIN_COUNT}-{MAX_BIN_COUNT})", 
-                                font=FONT_HINT_TEXT, foreground='gray')
-        bin_hint_label.grid(row=0, column=1, sticky='w', padx=(5,0))
-
-        # Configure bin frame column weights (optional, for consistent spacing)
-        bin_frame.columnconfigure(0, weight=0)  # Entry field doesn't need to expand
-        bin_frame.columnconfigure(1, weight=1)  # Hint label can expand if needed
-
-        # Gaussian fit info button
-        self.gaussian_info_btn = ttk.Button(
-            self.control_frame, 
-            text="📊 Fit Info", 
-            command=self.show_gaussian_info, 
-            state='disabled',
-            width=10
+        # Action Buttons Panel
+        self.action_buttons_panel = ActionButtonsPanel(
+            self.control_frame,
+            on_plot=self.create_plot,
+            on_report=self.generate_report,
+            reports_available=REPORTS_AVAILABLE
         )
-        self.gaussian_info_btn.grid(row=9, column=2, sticky='w', padx=(10,0), pady=2)
-
-        # Report generation button - will be mode-restricted
-        self.report_button = ttk.Button(self.control_frame, text="Generate Report", 
-                                       command=self.generate_report, state='disabled')
-        self.report_button.grid(row=10, column=0, columnspan=2, sticky='ew', pady=5)
-        
-        # Show/hide report button based on availability
-        if not REPORTS_AVAILABLE:
-            self.report_button.config(state='disabled', text="Generate Report (ReportLab not installed)")
+        self.action_buttons_panel.pack(fill='x', pady=5)
         
         # === PLOT FRAME ===
         self.plot_frame = ttk.LabelFrame(self.plot_scrollable_frame.scrollable_frame, text="Plot", padding=10)
         
-        # Add navigation controls to plot frame (moved from dataset management)
+        # Add navigation controls to plot frame
         plot_nav_frame = ttk.Frame(self.plot_frame)
         plot_nav_frame.pack(fill='x', pady=(0, 10))
         
         # Dataset navigation buttons with save graph button in the middle
         self.prev_dataset_btn = ttk.Button(plot_nav_frame, text="◀ Previous Dataset", 
-                                          command=self.previous_dataset, state='disabled')
+                                        command=self.previous_dataset, state='disabled')
         self.prev_dataset_btn.pack(side='left')
         
         self.save_graph_btn = ttk.Button(plot_nav_frame, text="💾 Save Graph", 
@@ -438,12 +282,14 @@ class MainWindow:
         self.save_graph_btn.pack(side='left', expand=True) 
         
         self.next_dataset_btn = ttk.Button(plot_nav_frame, text="Next Dataset ▶", 
-                                          command=self.next_dataset, state='disabled')
+                                        command=self.next_dataset, state='disabled')
         self.next_dataset_btn.pack(side='right')
-        
-        # Configure column weights
-        self.control_frame.columnconfigure(1, weight=1)
     
+    def _handle_dataset_reorder(self, drag_item, target_item, drop_y):
+        """Handle dataset reorder request from DatasetListPanel."""
+        # Call the existing reorder logic
+        self._reorder_datasets(drag_item, target_item, drop_y)
+
     def save_graph(self):
         """Save the current graph as a PNG image."""
         if not hasattr(self, 'canvas') or not self.current_figure:
