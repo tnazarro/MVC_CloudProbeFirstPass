@@ -67,18 +67,20 @@ FONT_STATUS_LARGE = UI_FONTS['large_heading']  # For large status labels
 INSTRUMENT_PREVIEW_DEFAULTS = { #TODO: Choose defaults wisely for each instrument; these are subject to change
     'CDP': 60,           # CDP
     'CDP PBP': 60,       # CDP PBP variant
-    'FM-100': 20,        # FM-100 instruments
-    'FM-120': 20,        # FM-120 instruments
-    'CAS': 18,          # CAS instruments
-    'CAS-DPOL': 18,     # CAS-DPOL variant
-    'CAS DPOL': 18,     # Alternative naming
-    'BCPD': 15,         # BCPD instruments
-    'BCP': 15,          # BCP instruments
-    'GFAS': 22,         # GFAS instruments
+    'FM-100': 9,        # FM-100 instruments
+    'FM-120': 9,        # FM-120 instruments
+    'FM 100': 9,        # FM-100 instruments alternate naming
+    'FM 120': 9,        # FM-120 instruments alternate
+    'CAS': 9,          # CAS instruments
+    'CAS-DPOL': 9,     # CAS-DPOL variant
+    'CAS DPOL': 9,     # Alternative naming
+    'BCPD': 9,         # BCPD instruments
+    'BCP': 9,          # BCP instruments
+    'GFAS': 0,         # GFAS instruments
     'Generated Data': 10  # For generated/test data   
 }
 
-DEFAULT_PREVIEW_LINES = 15 
+DEFAULT_PREVIEW_LINES = 15
 
 REPORT_MARGIN = 36  # Margin size in points
 
