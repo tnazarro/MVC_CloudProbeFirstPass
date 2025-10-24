@@ -802,7 +802,7 @@ class MainWindow:
                 # Set as active dataset
                 self.dataset_manager.set_active_dataset(dataset_id)
                 
-                self._update_UI(self)
+                self._update_UI()
                 
                 if skip_rows > 0:
                     messagebox.showinfo("Success", f"Dataset '{tag}' loaded successfully!\nSkipped {skip_rows} rows.")
@@ -910,7 +910,7 @@ class MainWindow:
                 self.file_queue.mark_current_processed(dataset_id)
                 self.dataset_manager.set_active_dataset(dataset_id)
                 
-                self._update_UI(self)
+                self._update_UI()
 
                 logger.info(f"Successfully loaded queue file: {tag}")
                 self._process_current_queue_file()  # Continue with next file
