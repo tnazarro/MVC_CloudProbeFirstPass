@@ -1,5 +1,5 @@
 """
-Custom tkinter widgets and container helpers.
+Custom tkinter widgets and container helpers for clean layout management.
 """
 
 import tkinter as tk
@@ -119,6 +119,142 @@ class QueueStatusPanel(ttk.Frame):
         """Update the status message."""
         self.status_label.config(text=text, foreground=foreground)
 
+class DatasetListPanel(ttk.LabelFrame):
+    """
+    Panel containing dataset treeview, tag editor, and inline management.
+    
+    Handles drag-and-drop reordering internally, but delegates actual
+    dataset operations to callbacks.
+    """
+    
+    def __init__(self, parent,
+                 current_tag_var: tk.StringVar,
+                 on_dataset_select: Callable,
+                 on_tag_save: Callable,
+                 on_dataset_reorder: Callable,
+                 validate_float_func,
+                 treeview_height=8,
+                 **kwargs):
+        super().__init__(parent, text="Loaded Datasets", padding=5, **kwargs)
+        
+        # Store callbacks
+        self.on_dataset_select = on_dataset_select
+        self.on_tag_save = on_tag_save
+        self.on_dataset_reorder = on_dataset_reorder
+        self.current_tag_var = current_tag_var
+        
+        # Drag-and-drop state
+        self.drag_item = None
+        self.drag_start_y = None
+        
+        # === TREEVIEW WITH SCROLLBARS ===
+        list_container = ttk.Frame(self)
+        list_container.pack(fill='x', pady=(0, 5))
+        
+        # Create treeview
+        self.treeview = ttk.Treeview(
+            list_container,
+            columns=('tag', 'filename'),
+            show='tree headings',
+            height=treeview_height,
+            selectmode='browse'
+        )
+        
+        # Configure columns
+        self.treeview.heading('#0', text='')
+        self.treeview.heading('tag', text='Bead Size (μm)')
+        self.treeview.heading('filename', text='Filename')
+        
+        self.treeview.column('#0', width=15, minwidth=15, stretch=False)
+        self.treeview.column('tag', width=80, minwidth=60, stretch=True)
+        self.treeview.column('filename', width=120, minwidth=80, stretch=True)
+        
+        # Scrollbars (using grid - only exception)
+        scrollbar_y = ttk.Scrollbar(list_container, orient='vertical', command=self.treeview.yview)
+        scrollbar_x = ttk.Scrollbar(list_container, orient='horizontal', command=self.treeview.xview)
+        
+        self.treeview.configure(yscrollcommand=scrollbar_y.set, xscrollcommand=scrollbar_x.set)
+        
+        # Grid layout for treeview and scrollbars
+        self.treeview.grid(row=0, column=0, sticky='nsew')
+        scrollbar_y.grid(row=0, column=1, sticky='ns')
+        scrollbar_x.grid(row=1, column=0, sticky='ew')
+        
+        list_container.grid_rowconfigure(0, weight=1)
+        list_container.grid_columnconfigure(0, weight=1)
+        
+        # Bind events
+        self.treeview.bind('<ButtonPress-1>', self._on_button_press)
+        self.treeview.bind('<B1-Motion>', self._on_drag_motion)
+        self.treeview.bind('<ButtonRelease-1>', self._on_button_release)
+        self.treeview.bind('<<TreeviewSelect>>', lambda e: self.on_dataset_select())
+        
+        # === TAG EDITOR ===
+        tag_editor_frame = ttk.LabelFrame(self, text="Bead Size (μm)", padding=5)
+        tag_editor_frame.pack(fill='x', pady=(0, 5))
+        
+        tag_entry_container = ttk.Frame(tag_editor_frame)
+        tag_entry_container.pack(fill='x')
+        
+        ttk.Label(tag_entry_container, text="Bead Size (μm):").pack(side='left', padx=(0, 5))
+        
+        self.tag_entry = ttk.Entry(
+            tag_entry_container,
+            textvariable=current_tag_var,
+            state='disabled',
+            validate='key',
+            validatecommand=(validate_float_func, '%P')
+        )
+        self.tag_entry.pack(side='left', fill='x', expand=True, padx=(0, 5))
+        
+        self.tag_save_btn = ttk.Button(
+            tag_entry_container,
+            text="💾",
+            width=3,
+            command=on_tag_save,
+            state='disabled'
+        )
+        self.tag_save_btn.pack(side='right')
+    
+    # === DRAG-AND-DROP METHODS ===
+    
+    def _on_button_press(self, event):
+        """Handle mouse button press for drag start."""
+        item = self.treeview.identify_row(event.y)
+        if item:
+            self.drag_item = item
+            self.drag_start_y = event.y
+    
+    def _on_drag_motion(self, event):
+        """Handle drag motion for visual feedback."""
+        if self.drag_item:
+            # Could add visual feedback here (e.g., change cursor)
+            pass
+    
+    def _on_button_release(self, event):
+        """Handle mouse button release to complete drag-and-drop."""
+        if self.drag_item:
+            target_item = self.treeview.identify_row(event.y)
+            
+            if target_item and target_item != self.drag_item:
+                # Delegate the actual reordering to the callback
+                self.on_dataset_reorder(self.drag_item, target_item, event.y)
+            
+            # Clean up drag state
+            self.drag_item = None
+            self.drag_start_y = None
+    
+    # === PUBLIC INTERFACE ===
+    
+    def get_selected_item(self):
+        """Get the currently selected treeview item."""
+        selection = self.treeview.selection()
+        return selection[0] if selection else None
+    
+    def clear_selection(self):
+        """Clear treeview selection."""
+        self.treeview.selection_remove(self.treeview.selection())
+
 
 class DatasetManagementPanel(ttk.LabelFrame):
     """Panel with dataset management action buttons."""
@@ -167,12 +303,30 @@ class DatasetManagementPanel(ttk.LabelFrame):
         self.help_btn.pack(side='right')
 
 
+class StatsPanel(ttk.LabelFrame):
+    """Panel for displaying dataset statistics."""
+    
+    def __init__(self, parent, text_height=8, text_width=30, **kwargs):
+        super().__init__(parent, text="Data Info", padding=5, **kwargs)
+        
+        self.stats_text = tk.Text(self, height=text_height, width=text_width)
+        self.stats_text.pack(fill='both', expand=True)
+    
+    def set_stats(self, stats_text: str):
+        """Update the statistics display."""
+        self.stats_text.delete('1.0', tk.END)
+        self.stats_text.insert('1.0', stats_text)
+    
+    def clear(self):
+        """Clear the statistics display."""
+        self.stats_text.delete('1.0', tk.END)
+
+
 class AnalysisControlsPanel(ttk.Frame):
     """Panel containing column selection, bin count, and gaussian fit controls."""
     
     def __init__(self, parent,
                  size_column_var: tk.StringVar,
-                 frequency_column_var: tk.StringVar,
                  bin_count_var: tk.IntVar,
                  on_column_change: Callable,
                  on_bin_change: Callable,
@@ -194,16 +348,6 @@ class AnalysisControlsPanel(ttk.Frame):
             state='readonly'
         )
         self.size_combo.bind('<<ComboboxSelected>>', on_column_change)
-        
-        # Frequency column selection #TODO: Remove
-        freq_row = LabeledRow(self, "Frequency Column:", label_width=15)
-        freq_row.pack(fill='x', pady=2)
-        self.frequency_combo = freq_row.add_widget(
-            ttk.Combobox,
-            textvariable=frequency_column_var,
-            state='readonly'
-        )
-        self.frequency_combo.bind('<<ComboboxSelected>>', on_column_change)
         
         # Bin count
         bin_row = LabeledRow(self, "Bins:", label_width=15)
