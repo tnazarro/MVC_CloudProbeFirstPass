@@ -193,13 +193,10 @@ class DatasetListPanel(ttk.LabelFrame):
         tag_editor_frame = ttk.LabelFrame(self, text="Bead Size (μm)", padding=5)
         tag_editor_frame.pack(fill='x', pady=(0, 5))
         
-        tag_entry_container = ttk.Frame(tag_editor_frame)
-        tag_entry_container.pack(fill='x')
-        
-        ttk.Label(tag_entry_container, text="Bead Size (μm):").pack(side='left', padx=(0, 5))
+        ttk.Label(tag_editor_frame, text="Bead Size (μm):").pack(side='left', padx=(0, 5))
         
         self.tag_entry = ttk.Entry(
-            tag_entry_container,
+            tag_editor_frame,
             textvariable=current_tag_var,
             state='disabled',
             validate='key',
@@ -208,7 +205,7 @@ class DatasetListPanel(ttk.LabelFrame):
         self.tag_entry.pack(side='left', fill='x', expand=True, padx=(0, 5))
         
         self.tag_save_btn = ttk.Button(
-            tag_entry_container,
+            tag_editor_frame,
             text="💾",
             width=3,
             command=on_tag_save,
@@ -228,11 +225,19 @@ class DatasetListPanel(ttk.LabelFrame):
     def _on_drag_motion(self, event):
         """Handle drag motion for visual feedback."""
         if self.drag_item:
-            # Could add visual feedback here (e.g., change cursor)
-            pass
+            target_item = self.treeview.identify_row(event.y)
+            if target_item and target_item != self.drag_item:
+                # Change cursor to indicate valid drop target
+                self.treeview.configure(cursor="hand2")
+            else:
+                # Reset cursor when not over valid target
+                self.treeview.configure(cursor="")
     
     def _on_button_release(self, event):
         """Handle mouse button release to complete drag-and-drop."""
+        # Always reset cursor first
+        self.treeview.configure(cursor="")
+        
         if self.drag_item:
             target_item = self.treeview.identify_row(event.y)
             
@@ -267,11 +272,8 @@ class DatasetManagementPanel(ttk.LabelFrame):
                  **kwargs):
         super().__init__(parent, text="Dataset Management", padding=5, **kwargs)
         
-        actions_frame = ttk.Frame(self)
-        actions_frame.pack(fill='x', pady=5)
-        
         self.reset_config_btn = ttk.Button(
-            actions_frame,
+            self,
             text="Reset to Config Defaults",
             command=on_reset_config,
             state='disabled'
@@ -279,7 +281,7 @@ class DatasetManagementPanel(ttk.LabelFrame):
         self.reset_config_btn.pack(side='left', padx=(0, 5))
         
         self.edit_notes_btn = ttk.Button(
-            actions_frame,
+            self,
             text="Edit Notes",
             command=on_edit_notes,
             state='disabled'
@@ -287,7 +289,7 @@ class DatasetManagementPanel(ttk.LabelFrame):
         self.edit_notes_btn.pack(side='left', padx=(0, 5))
         
         self.remove_dataset_btn = ttk.Button(
-            actions_frame,
+            self,
             text="Remove",
             command=on_remove,
             state='disabled'
@@ -295,7 +297,7 @@ class DatasetManagementPanel(ttk.LabelFrame):
         self.remove_dataset_btn.pack(side='left', padx=(0, 5))
         
         self.help_btn = ttk.Button(
-            actions_frame,
+            self,
             text="?",
             width=3,
             command=on_help
@@ -336,8 +338,8 @@ class AnalysisControlsPanel(ttk.Frame):
                  **kwargs):
         super().__init__(parent, **kwargs)
         
-        # Separator before analysis controls
-        ttk.Separator(self, orient='horizontal').pack(fill='x', pady=5)
+        # # Separator before analysis controls
+        # ttk.Separator(self, orient='horizontal').pack(fill='x', pady=5)
         
         # Size column selection
         size_row = LabeledRow(self, "Size Column:", label_width=15)
@@ -352,17 +354,14 @@ class AnalysisControlsPanel(ttk.Frame):
         # Bin count
         bin_row = LabeledRow(self, "Bins:", label_width=15)
         bin_row.pack(fill='x', pady=2)
-        
-        bin_controls = ttk.Frame(bin_row.widget_container)
-        bin_controls.pack(fill='x', expand=True)
-        
-        self.bin_entry = ttk.Entry(bin_controls, textvariable=bin_count_var, width=8)
+
+        self.bin_entry = ttk.Entry(bin_row, textvariable=bin_count_var, width=8)
         self.bin_entry.pack(side='left')
         self.bin_entry.bind('<Return>', on_bin_change)
         self.bin_entry.bind('<FocusOut>', on_bin_change)
         
         bin_hint = ttk.Label(
-            bin_controls,
+            bin_row,
             text=f"({min_bins}-{max_bins})",
             font=('TkDefaultFont', 8),
             foreground='gray'
@@ -370,7 +369,7 @@ class AnalysisControlsPanel(ttk.Frame):
         bin_hint.pack(side='left', padx=(5, 0))
         
         self.gaussian_info_btn = ttk.Button(
-            bin_controls,
+            bin_row,
             text="📊 Fit Info",
             command=on_gaussian_info,
             state='disabled',
@@ -380,7 +379,7 @@ class AnalysisControlsPanel(ttk.Frame):
 
 
 class ActionButtonsPanel(ttk.Frame):
-    """Panel containing plot and report action buttons."""
+    """Panel containing report action button."""
     
     def __init__(self, parent,
                  on_report: Callable,

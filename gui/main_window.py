@@ -181,7 +181,6 @@ class MainWindow:
             self._show_config_warning_banner()
 
         # Initialize UI state
-        self._update_data_mode_ui()
         self._update_dataset_ui()
         self._update_analysis_mode_ui()
         self._setup_keyboard_shortcuts()
@@ -1525,9 +1524,6 @@ For more detailed help, please refer to the user manual or contact support."""
         # Update data processor mode
         data_processor = active_dataset['data_processor']
         data_processor.set_data_mode(settings['data_mode'])
-        
-        # Update UI elements
-        self._update_data_mode_ui()
     
     def _save_active_dataset_settings(self):
         """Save current UI settings to the active dataset."""
@@ -1556,9 +1552,6 @@ For more detailed help, please refer to the user manual or contact support."""
         
         # Update data processor
         active_dataset['data_processor'].set_data_mode(mode)
-        
-        # Update UI
-        self._update_data_mode_ui()
         
         # Save settings
         self._save_active_dataset_settings()
@@ -1596,11 +1589,6 @@ For more detailed help, please refer to the user manual or contact support."""
         # Update plot if one exists
         if hasattr(self, 'canvas'):
             self._update_plot()
-    
-    def _update_data_mode_ui(self):
-        """Update UI elements based on current data mode."""
-        # Frequency column removed - method now a no-op
-        pass
     
     def _update_column_combos(self):
         """Update the column selection comboboxes."""
@@ -1705,7 +1693,7 @@ For more detailed help, please refer to the user manual or contact support."""
         # Update column selections
         if mode == 'pre_aggregated':
             data_processor.set_columns(
-                self.size_column_var.get(),
+                self.size_column_var.get()
             )
         else:  # raw_measurements
             data_processor.set_columns(
@@ -1894,7 +1882,7 @@ For more detailed help, please refer to the user manual or contact support."""
             
             if not figures:
                 messagebox.showerror("Error", "Failed to generate any plots for the report.")
-            return
+                return
             
             # Generate the multi-plot report
             success = self.report_template.create_report(
@@ -1932,7 +1920,7 @@ For more detailed help, please refer to the user manual or contact support."""
             
             if size_data is None:
                 logger.warning(f"No size data for dataset {dataset['tag']}")
-                return None 
+                return None
             
             # Build metadata
             metadata = {
