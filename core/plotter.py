@@ -246,9 +246,6 @@ class ParticlePlotter:
         if data_mode == "raw_measurements":
             n_measurements = len(size_data)
             stats_text += f'Total: {n_measurements}'
-        elif data_mode == "pre_aggregated" and frequency_data is not None:
-            total_frequency = np.sum(frequency_data)
-            stats_text += f'Total: {total_frequency:.0f}'
         else:
             stats_text += f'Total: {len(size_data)}'
         
