@@ -338,9 +338,6 @@ class AnalysisControlsPanel(ttk.Frame):
                  **kwargs):
         super().__init__(parent, **kwargs)
         
-        # # Separator before analysis controls
-        # ttk.Separator(self, orient='horizontal').pack(fill='x', pady=5)
-        
         # Size column selection
         size_row = LabeledRow(self, "Size Column:", label_width=15)
         size_row.pack(fill='x', pady=2)
