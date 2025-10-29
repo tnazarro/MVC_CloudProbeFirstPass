@@ -23,6 +23,7 @@ from config.constants import *
 from core.file_queue import FileQueue
 from gui.dialogs.file_preview import FilePreviewDialog
 from gui.dialogs.load_choice import LoadChoiceDialog
+from gui.widgets import *
 
 
 # Try to import report generation (now required dependency)
@@ -147,7 +148,6 @@ class MainWindow:
         # GUI variables
         self.bin_count_var = tk.IntVar(value=DEFAULT_BIN_COUNT)
         self.size_column_var = tk.StringVar()
-        self.frequency_column_var = tk.StringVar()
         self.show_stats_lines_var = tk.BooleanVar(value=False)
         self.data_mode_var = tk.StringVar(value='raw_measurements')  # 'pre_aggregated' or 'raw_measurements'
         self.skip_rows_var = tk.IntVar(value=0)
@@ -166,9 +166,6 @@ class MainWindow:
         # Track current figure for proper cleanup
         self.current_figure = None
 
-        # Drag-and-drop support
-        self.drag_item = None
-        self.drag_start_y = None
         
         # Report generation
         if REPORTS_AVAILABLE:
@@ -184,263 +181,108 @@ class MainWindow:
             self._show_config_warning_banner()
 
         # Initialize UI state
-        self._update_data_mode_ui()
         self._update_dataset_ui()
         self._update_analysis_mode_ui()
         self._setup_keyboard_shortcuts()
     
     def _create_widgets(self):
-        """Create all GUI widgets."""
-        # Main frame (no longer needed - keeping for compatibility but not used)
+        """Create all GUI widgets using container panels."""
+        # Main frame (keeping for compatibility but not used)
         self.main_frame = ttk.Frame(self.root)
         
         # Control frame (left side) - now goes inside scrollable frame
         self.control_frame = ttk.LabelFrame(self.scrollable_frame.scrollable_frame, text="Controls", padding=10)
         
-        self.load_buttons_frame = ttk.LabelFrame(self.control_frame, text="Analysis Mode", padding=5)
-        self.load_buttons_frame.grid(row=0, column=0, columnspan=3, sticky='ew', pady=(0,10))
-        
-        # Two direct load buttons
-        buttons_container = ttk.Frame(self.load_buttons_frame)
-        buttons_container.pack(fill='x', pady=(0,5))
-        
-        self.calibration_load_button = ttk.Button(
-            buttons_container, 
-            text="Load for Calibration", 
-            command=self._load_for_calibration
-        )
-        self.calibration_load_button.pack(side='left', padx=(0,10), fill='x', expand=True)
-        
-        self.verification_load_button = ttk.Button(
-            buttons_container, 
-            text="Load for Verification", 
-            command=self._load_for_verification
-        )
-        self.verification_load_button.pack(side='left', fill='x', expand=True)
-        
-        # Mode description label
-        self.mode_description = ttk.Label(
-            self.load_buttons_frame, 
-            text="Current Mode: Calibration (Single dataset analysis)",
-            font=FONT_HINT_TEXT,
-            foreground='blue'
-        )
-        self.mode_description.pack(anchor='w', pady=(5,0))
-        
-        # Serial number input (session-level for all datasets)
-        self.serial_frame = ttk.Frame(self.load_buttons_frame)
-        self.serial_frame.pack(fill='x', pady=(10,0))
-
-        ttk.Label(self.serial_frame, text="Instrument Serial Number:").pack(side='left', padx=(0,5))
-
-        self.serial_var = tk.StringVar(value=self.dataset_manager.instrument_serial_number)
-        self.serial_entry = ttk.Entry(self.serial_frame, textvariable=self.serial_var, width=20)
-        self.serial_entry.pack(side='left')
-
-        # Bind to update manager when changed
-        self.serial_var.trace_add('write', self._on_serial_number_change)
-
-        # Queue status display
-        self.queue_status_frame = ttk.Frame(self.control_frame)
-        self.queue_status_frame.grid(row=1, column=0, columnspan=3, sticky='ew', pady=2)
-        
-        self.queue_status_label = ttk.Label(self.queue_status_frame, text="", font=FONT_STATUS)
-        self.queue_status_label.pack(anchor='w')
-        
-        # === LOADED DATASETS FRAME ===
-        self.dataset_list_frame = ttk.LabelFrame(self.control_frame, text="Loaded Datasets", padding=5)
-        self.dataset_list_frame.grid(row=2, column=0, columnspan=3, sticky='ew', pady=(10,10)) 
-        
-        # Dataset treeview with scrollbar - REDUCED HEIGHT to 8 rows with separate columns
-        list_container = ttk.Frame(self.dataset_list_frame)
-        list_container.pack(fill='x', pady=(0,5))  # Changed from fill='both', expand=True
-        
-        # Create Treeview with columns for Tag and Filename
-        self.dataset_treeview = ttk.Treeview(
-            list_container, 
-            columns=('tag', 'filename'), 
-            show='tree headings',  # Show both tree and headings
-            height=8,  # REDUCED to 8 rows (was 10) to fit in left column
-            selectmode='browse'  # Single selection
-        )
-        
-        # Configure columns
-        self.dataset_treeview.heading('#0', text='')  # Hide the tree column header
-        self.dataset_treeview.heading('tag', text='Bead Size (μm)')
-        self.dataset_treeview.heading('filename', text='Filename')
-        
-        # Set column widths - adjusted for narrower left column
-        self.dataset_treeview.column('#0', width=15, minwidth=15, stretch=False)  # Smaller tree column for bullet
-        self.dataset_treeview.column('tag', width=80, minwidth=60, stretch=True)  # Narrower tag column
-        self.dataset_treeview.column('filename', width=120, minwidth=80, stretch=True)  # Narrower filename column
-        
-        # Scrollbars
-        dataset_scrollbar_y = ttk.Scrollbar(list_container, orient='vertical', command=self.dataset_treeview.yview)
-        dataset_scrollbar_x = ttk.Scrollbar(list_container, orient='horizontal', command=self.dataset_treeview.xview)
-        
-        self.dataset_treeview.configure(yscrollcommand=dataset_scrollbar_y.set, xscrollcommand=dataset_scrollbar_x.set)
-        self.dataset_treeview.bind('<ButtonPress-1>', self._on_treeview_button_press)
-        self.dataset_treeview.bind('<B1-Motion>', self._on_treeview_drag_motion)
-        self.dataset_treeview.bind('<ButtonRelease-1>', self._on_treeview_button_release)
-        self.dataset_treeview.bind('<<TreeviewSelect>>', self._on_dataset_select)
-        
-        # Grid layout for treeview and scrollbars
-        self.dataset_treeview.grid(row=0, column=0, sticky='nsew')
-        dataset_scrollbar_y.grid(row=0, column=1, sticky='ns')
-        dataset_scrollbar_x.grid(row=1, column=0, sticky='ew')
-        
-        list_container.grid_rowconfigure(0, weight=1)
-        list_container.grid_columnconfigure(0, weight=1)
-        
-        # === INLINE TAG EDITOR ===
-        tag_editor_frame = ttk.LabelFrame(self.dataset_list_frame, text="Bead Size (μm)", padding=5)
-        tag_editor_frame.pack(fill='x', pady=(0,5))
-
-        # Tag entry with label
-        tag_entry_container = ttk.Frame(tag_editor_frame)
-        tag_entry_container.pack(fill='x')
-
-        ttk.Label(tag_entry_container, text="Bead Size (μm):").pack(side='left', padx=(0,5))
-
-        # Register validation function for float-only input
+        # Register float validation (needed before DatasetListPanel creation)
         self.validate_float = self.root.register(self._validate_float_input)
-
-        self.tag_entry = ttk.Entry(
-            tag_entry_container, 
-            textvariable=self.current_tag_var,
-            state='disabled',  # Start disabled until dataset is selected
-            validate='key',    # Validate on every keystroke
-            validatecommand=(self.validate_float, '%P')  # %P = new value after keystroke
+        
+        # Serial number variable (needed by AnalysisModePanel)
+        self.serial_var = tk.StringVar(value=self.dataset_manager.instrument_serial_number)
+        self.serial_var.trace_add('write', self._on_serial_number_change)
+        
+        # Analysis Mode Panel
+        self.analysis_mode_panel = AnalysisModePanel(
+            self.control_frame,
+            on_load_calibration=self._load_for_calibration,
+            on_load_verification=self._load_for_verification,
+            serial_var=self.serial_var
         )
-        self.tag_entry.pack(side='left', fill='x', expand=True, padx=(0,5))
-
-        # Bind tag entry events (keep existing bindings)
+        self.analysis_mode_panel.pack(fill='x', pady=(0, 10))
+        
+        # Queue Status Panel
+        self.queue_status_panel = QueueStatusPanel(
+            self.control_frame,
+            font_style=FONT_STATUS
+        )
+        self.queue_status_panel.pack(fill='x', pady=2)
+        
+        # Dataset List Panel (includes treeview, tag editor)
+        self.dataset_list_panel = DatasetListPanel(
+            self.control_frame,
+            current_tag_var=self.current_tag_var,
+            on_dataset_select=self._on_dataset_select,
+            on_tag_save=self._save_current_tag,
+            on_dataset_reorder=self._handle_dataset_reorder,
+            validate_float_func=self.validate_float,
+            treeview_height=8
+        )
+        self.dataset_list_panel.pack(fill='x', pady=(10, 10))
+        
+        # Bind tag entry events
         self.current_tag_var.trace('w', self._on_tag_var_change)
-        self.tag_entry.bind('<Return>', self._on_tag_entry_return)
-        self.tag_entry.bind('<FocusOut>', self._on_tag_entry_focusout)
-
-        # Quick save button (keep existing)
-        self.tag_save_btn = ttk.Button(
-            tag_entry_container, 
-            text="💾", 
-            width=3,
-            command=self._save_current_tag,
-            state='disabled'
+        self.dataset_list_panel.tag_entry.bind('<Return>', self._on_tag_entry_return)
+        self.dataset_list_panel.tag_entry.bind('<FocusOut>', self._on_tag_entry_focusout)
+        
+        # Dataset Management Panel
+        self.dataset_mgmt_panel = DatasetManagementPanel(
+            self.control_frame,
+            on_reset_config=self.reset_to_config_defaults,
+            on_edit_notes=self.edit_dataset_notes,
+            on_remove=self.remove_dataset,
+            on_help=self.show_help_dialog
         )
-        self.tag_save_btn.pack(side='right')
+        self.dataset_mgmt_panel.pack(fill='x', pady=5)
         
-        # === DATASET MANAGEMENT CONTROLS ===
-        self.dataset_mgmt_frame = ttk.LabelFrame(self.control_frame, text="Dataset Management", padding=5)
-        self.dataset_mgmt_frame.grid(row=4, column=0, columnspan=3, sticky='ew', pady=5)
-        
-        # Dataset actions
-        actions_frame = ttk.Frame(self.dataset_mgmt_frame)
-        actions_frame.pack(fill='x', pady=5)
-
-        self.reset_config_btn = ttk.Button(actions_frame, text="Reset to Config",
-                                           command=self.reset_to_config_defaults, state='disabled')
-        self.reset_config_btn.pack(side='left', padx=(0,5))
-        
-        self.edit_notes_btn = ttk.Button(actions_frame, text="Edit Notes", 
-                                        command=self.edit_dataset_notes, state='disabled')
-        self.edit_notes_btn.pack(side='left', padx=(0,5))
-        
-        self.remove_dataset_btn = ttk.Button(actions_frame, text="Remove", 
-                                            command=self.remove_dataset, state='disabled')
-        self.remove_dataset_btn.pack(side='left', padx=(0,5))
-        
-        # Help button
-        self.help_btn = ttk.Button(actions_frame, text="?", width=3,
-                                  command=self.show_help_dialog)
-        self.help_btn.pack(side='right')
-        
-        # === DATA INFO (stats) ===
-        self.stats_frame = ttk.LabelFrame(self.control_frame, text="Data Info", padding=5)
-        self.stats_frame.grid(row=5, column=0, columnspan=3, sticky='ew', pady=5)
-        
-        self.stats_text = tk.Text(self.stats_frame, height=8, width=30)
-        self.stats_text.pack(fill='both', expand=True)
-        
-        # === DATA ANALYSIS CONTROLS ===
-        ttk.Separator(self.control_frame, orient='horizontal').grid(row=6, column=0, columnspan=3, sticky='ew', pady=5)
-        
-        #Column selection
-        ttk.Label(self.control_frame, text="Size Column:").grid(row=7, column=0, sticky='w', pady=2)
-        self.size_combo = ttk.Combobox(self.control_frame, textvariable=self.size_column_var, 
-                                    state='readonly')
-        self.size_combo.grid(row=7, column=1, sticky='ew', pady=2)
-        self.size_combo.bind('<<ComboboxSelected>>', self._on_column_change)
-
-        self.frequency_label = ttk.Label(self.control_frame, text="Frequency Column:")
-        self.frequency_label.grid(row=7, column=0, sticky='w', pady=2)
-        self.frequency_combo = ttk.Combobox(self.control_frame, textvariable=self.frequency_column_var, 
-                                        state='readonly')
-        self.frequency_combo.grid(row=7, column=1, sticky='ew', pady=2)
-        self.frequency_combo.bind('<<ComboboxSelected>>', self._on_column_change)
-
-        # Bin count control
-        ttk.Label(self.control_frame, text="Bins:").grid(row=8, column=0, sticky='w', pady=2)
-
-        # Create frame for bin controls
-        bin_frame = ttk.Frame(self.control_frame)
-        bin_frame.grid(row=8, column=1, columnspan=2, sticky='ew', pady=2)
-
-        # Bin count entry field only (remove slider)
-        self.bin_entry = ttk.Entry(bin_frame, textvariable=self.bin_count_var, width=8)
-        self.bin_entry.grid(row=0, column=0, sticky='w')
-        self.bin_entry.bind('<Return>', self._on_bin_entry_change)
-        self.bin_entry.bind('<FocusOut>', self._on_bin_entry_change)
-
-        # Optional: Add a label showing the valid range
-        bin_hint_label = ttk.Label(bin_frame, text=f"({MIN_BIN_COUNT}-{MAX_BIN_COUNT})", 
-                                font=FONT_HINT_TEXT, foreground='gray')
-        bin_hint_label.grid(row=0, column=1, sticky='w', padx=(5,0))
-
-        # Configure bin frame column weights (optional, for consistent spacing)
-        bin_frame.columnconfigure(0, weight=0)  # Entry field doesn't need to expand
-        bin_frame.columnconfigure(1, weight=1)  # Hint label can expand if needed
-
-        # Gaussian fit info button
-        self.gaussian_info_btn = ttk.Button(
-            self.control_frame, 
-            text="📊 Fit Info", 
-            command=self.show_gaussian_info, 
-            state='disabled',
-            width=10
+        # Stats Panel
+        self.stats_panel = StatsPanel(
+            self.control_frame,
+            text_height=8,
+            text_width=30
         )
-        self.gaussian_info_btn.grid(row=9, column=2, sticky='w', padx=(10,0), pady=2)
-
-        # Report generation button - will be mode-restricted
-        self.report_button = ttk.Button(self.control_frame, text="Generate Report", 
-                                       command=self.generate_report, state='disabled')
-        self.report_button.grid(row=10, column=0, columnspan=2, sticky='ew', pady=5)
+        self.stats_panel.pack(fill='x', pady=5)
         
-        # Show/hide report button based on availability
-        if not REPORTS_AVAILABLE:
-            self.report_button.config(state='disabled', text="Generate Report (ReportLab not installed)")
+        # Analysis Controls Panel
+        self.analysis_controls_panel = AnalysisControlsPanel(
+            self.control_frame,
+            size_column_var=self.size_column_var,
+            bin_count_var=self.bin_count_var,
+            on_column_change=self._on_column_change,
+            on_bin_change=self._on_bin_entry_change,
+            on_gaussian_info=self.show_gaussian_info,
+            min_bins=MIN_BIN_COUNT,
+            max_bins=MAX_BIN_COUNT
+        )
+        self.analysis_controls_panel.pack(fill='x', pady=5)
+        
+        # Action Buttons Panel
+        self.action_buttons_panel = ActionButtonsPanel(
+            self.control_frame,
+            on_report=self.generate_report,
+            reports_available=REPORTS_AVAILABLE
+        )
+        self.action_buttons_panel.pack(fill='x', pady=5)
         
         # === PLOT FRAME ===
         self.plot_frame = ttk.LabelFrame(self.plot_scrollable_frame.scrollable_frame, text="Plot", padding=10)
         
-        # Add navigation controls to plot frame (moved from dataset management)
-        plot_nav_frame = ttk.Frame(self.plot_frame)
-        plot_nav_frame.pack(fill='x', pady=(0, 10))
-        
-        # Dataset navigation buttons with save graph button in the middle
-        self.prev_dataset_btn = ttk.Button(plot_nav_frame, text="◀ Previous Dataset", 
-                                          command=self.previous_dataset, state='disabled')
-        self.prev_dataset_btn.pack(side='left')
-        
-        self.save_graph_btn = ttk.Button(plot_nav_frame, text="💾 Save Graph", 
-                                        command=self.save_graph, state='disabled')
-        self.save_graph_btn.pack(side='left', expand=True) 
-        
-        self.next_dataset_btn = ttk.Button(plot_nav_frame, text="Next Dataset ▶", 
-                                          command=self.next_dataset, state='disabled')
-        self.next_dataset_btn.pack(side='right')
-        
-        # Configure column weights
-        self.control_frame.columnconfigure(1, weight=1)
+        # Plot Navigation Panel
+        self.plot_nav_panel = PlotNavigationPanel(
+            self.plot_frame,
+            on_previous=self.previous_dataset,
+            on_next=self.next_dataset,
+            on_save=self.save_graph
+        )
+        self.plot_nav_panel.pack(fill='x', pady=(0, 10))
     
     def save_graph(self):
         """Save the current graph as a PNG image."""
@@ -589,14 +431,14 @@ class MainWindow:
             
             # Enable save button if tag has changed
             if current_entry_tag != current_saved_tag:
-                self.tag_save_btn.config(state='normal')
+                self.dataset_list_panel.tag_save_btn.config(state='normal')
             else:
-                self.tag_save_btn.config(state='disabled')
+                self.dataset_list_panel.tag_save_btn.config(state='disabled')
     
     def _on_tag_entry_return(self, event):
         """Handle Enter key in tag entry - save immediately."""
         self._save_current_tag()
-        self.tag_entry.selection_clear()  # Clear selection after save
+        self.dataset_list_panel.tag_entry.selection_clear()  # Clear selection after save
         return 'break'  # Prevent default behavior
     
     def _on_tag_entry_focusout(self, event):
@@ -630,7 +472,7 @@ class MainWindow:
                 self._update_dataset_ui()  # Refresh UI to show changes
                 
                 # Visual feedback and update display
-                self.tag_save_btn.config(state='disabled')
+                self.dataset_list_panel.tag_save_btn.config(state='disabled')
                 self._updating_tag = True
                 self.current_tag_var.set(tag_display)  # Update display with normalized format
                 self._updating_tag = False
@@ -654,12 +496,12 @@ class MainWindow:
         
         if active_dataset:
             self.current_tag_var.set(active_dataset['tag'])
-            self.tag_entry.config(state='normal')
-            self.tag_save_btn.config(state='disabled')  # Start with save disabled
+            self.dataset_list_panel.tag_entry.config(state='normal')
+            self.dataset_list_panel.tag_save_btn.config(state='disabled')  # Start with save disabled
         else:
             self.current_tag_var.set("")
-            self.tag_entry.config(state='disabled')
-            self.tag_save_btn.config(state='disabled')
+            self.dataset_list_panel.tag_entry.config(state='disabled')
+            self.dataset_list_panel.tag_save_btn.config(state='disabled')
         
         self._updating_tag = False
     
@@ -670,12 +512,12 @@ class MainWindow:
         
         # Update mode description
         if mode == 'calibration':
-            self.mode_description.config(
+            self.analysis_mode_panel.mode_description.config(
                 text="Current Mode: Calibration (Single/Multi dataset analysis)",
                 foreground='blue'
             )
         else:  # verification
-            self.mode_description.config(
+            self.analysis_mode_panel.mode_description.config(
                 text="Current Mode: Verification (Multi-dataset comparison)",
                 foreground='green'
             )
@@ -689,18 +531,17 @@ class MainWindow:
         is_calibration = (mode == 'calibration')
         
         if is_calibration:
-            self.mode_description.config(
+            self.analysis_mode_panel.mode_description.config(
                 text="Current Mode: Calibration (Single/Multi dataset analysis)",
                 foreground='blue'
             )
         else:
-            self.mode_description.config(
+            self.analysis_mode_panel.mode_description.config(
                 text="Current Mode: Verification (Multi-dataset comparison)",
                 foreground='green'
             )
         
         # Update other UI elements based on mode
-        self._update_report_button_state_for_mode()
         self._update_navigation_buttons_for_mode()
         
         logger.info(f"UI updated for {mode} mode")
@@ -710,21 +551,21 @@ class MainWindow:
         mode = self.analysis_mode_var.get()
         
         if not REPORTS_AVAILABLE:
-            self.report_button.config(state='disabled', text="Generate Report (ReportLab not installed)")
+            self.action_buttons_panel.report_button.config(state='disabled', text="Generate Report (ReportLab not installed)")
             return
         
         if mode == 'calibration':
             # In calibration mode, disable report generation
-            self.report_button.config(
+            self.action_buttons_panel.report_button.config(
                 state='disabled',
                 text="Generate Report (Verification mode only)"
             )
         else:  # verification mode
             # In verification mode, enable if we have data and plot
             if hasattr(self, 'canvas') and self.current_figure:
-                self.report_button.config(state='normal', text="Generate Report")
+                self.action_buttons_panel.report_button.config(state='normal', text="Generate Report")
             else:
-                self.report_button.config(state='disabled', text="Generate Report")
+                self.action_buttons_panel.report_button.config(state='disabled', text="Generate Report")
     
     def _update_navigation_buttons_for_mode(self):
         """Update navigation buttons based on mode."""
@@ -735,15 +576,15 @@ class MainWindow:
         
         if mode == 'calibration':
             # In calibration mode, navigation is less relevant but still functional
-            self.prev_dataset_btn.config(state='normal' if has_multiple else 'disabled')
-            self.next_dataset_btn.config(state='normal' if has_multiple else 'disabled')
+            self.plot_nav_panel.prev_btn.config(state='normal' if has_multiple else 'disabled')
+            self.plot_nav_panel.next_btn.config(state='normal' if has_multiple else 'disabled')
         else:  # verification mode
             # In verification mode, navigation is fully functional
-            self.prev_dataset_btn.config(state='normal' if has_multiple else 'disabled')
-            self.next_dataset_btn.config(state='normal' if has_multiple else 'disabled')
+            self.plot_nav_panel.prev_btn.config(state='normal' if has_multiple else 'disabled')
+            self.plot_nav_panel.next_btn.config(state='normal' if has_multiple else 'disabled')
         
         # Save graph button is enabled when there's a plot to save
-        self.save_graph_btn.config(state='normal' if has_plot else 'disabled')
+        self.plot_nav_panel.save_btn.config(state='normal' if has_plot else 'disabled')
     
     def _keep_only_active_dataset(self):
         """Remove all datasets except the active one (for calibration mode)."""
@@ -988,21 +829,21 @@ class MainWindow:
             return
 
         if not self.file_queue.has_more_files() and len(self.file_queue.files) == 0:
-            self.queue_status_label.config(text="")
+            self.queue_status_panel.set_status(text="")
             return
-        
+
         info = self.file_queue.get_current_file_info()
         
         if info['is_complete']:
-            self.queue_status_label.config(text="Queue processing complete")
+            self.queue_status_panel.set_status(text="Queue processing complete")
         elif info['has_current_file']:
             current_file = self.file_queue.get_current_file()
             status_text = f"Queue: {info['current_index'] + 1}/{info['total_files']} - {current_file['filename']}"
             if info['processed_count'] > 0 or info['failed_count'] > 0 or info['skipped_count'] > 0:
                 status_text += f" (P:{info['processed_count']} F:{info['failed_count']} S:{info['skipped_count']})"
-            self.queue_status_label.config(text=status_text)
+            self.queue_status_panel.set_status(text=status_text)
         else:
-            self.queue_status_label.config(text=f"Queue ready: {info['total_files']} files")
+            self.queue_status_panel.set_status(text=f"Queue ready: {info['total_files']} files")
     
     # === KEYBOARD SHORTCUTS ===
 
@@ -1074,8 +915,8 @@ class MainWindow:
     def _update_dataset_treeview(self):
         """Update the dataset treeview with current datasets in manager order."""
         # Clear existing items
-        for item in self.dataset_treeview.get_children():
-            self.dataset_treeview.delete(item)
+        for item in self.dataset_list_panel.treeview.get_children():
+            self.dataset_list_panel.treeview.delete(item)
         
         # Use the manager's internal order (not get_all_datasets which might sort)
         datasets_in_order = list(self.dataset_manager.datasets.values())
@@ -1089,20 +930,20 @@ class MainWindow:
                 filename_display = "Generated Data"
             
             # Insert item with tag and filename in separate columns
-            item_id = self.dataset_treeview.insert(
+            item_id = self.dataset_list_panel.treeview.insert(
                 '', 'end',
-                text='●',  # Bullet point in the tree column
+                text='•',
                 values=(dataset['tag'], filename_display),
                 tags=('dataset',)
             )
             
             # Select and show active dataset
             if dataset['id'] == active_id:
-                self.dataset_treeview.selection_set(item_id)
-                self.dataset_treeview.see(item_id)
+                self.dataset_list_panel.treeview.selection_set(item_id)
+                self.dataset_list_panel.treeview.see(item_id)
         
         # Configure tag styling
-        self.dataset_treeview.tag_configure('dataset', foreground='black')
+        self.dataset_list_panel.treeview.tag_configure('dataset', foreground='black')
 
     def _update_navigation_buttons(self):
         """Update the state of navigation and action buttons."""
@@ -1112,13 +953,13 @@ class MainWindow:
         self._update_navigation_buttons_for_mode()
         
         # Action buttons
-        self.edit_notes_btn.config(state='normal' if has_datasets else 'disabled')
-        self.reset_config_btn.config(state='normal' if has_datasets else 'disabled')
-        self.remove_dataset_btn.config(state='normal' if has_datasets else 'disabled')
+        self.dataset_mgmt_panel.edit_notes_btn.config(state='normal' if has_datasets else 'disabled')
+        self.dataset_mgmt_panel.reset_config_btn.config(state='normal' if has_datasets else 'disabled')
+        self.dataset_mgmt_panel.remove_dataset_btn.config(state='normal' if has_datasets else 'disabled')
 
-    def _on_dataset_select(self, event):
+    def _on_dataset_select(self, event=None):
         """Handle dataset selection from treeview."""
-        selection = self.dataset_treeview.selection()
+        selection = self.dataset_list_panel.treeview.selection()
         if selection:
             # Get the selected item
             selected_item = selection[0]
@@ -1127,7 +968,7 @@ class MainWindow:
             datasets = self.dataset_manager.get_all_datasets()
             
             # Get the index of the selected item in the treeview
-            all_items = self.dataset_treeview.get_children()
+            all_items = self.dataset_list_panel.treeview.get_children()
             try:
                 selected_index = all_items.index(selected_item)
                 
@@ -1147,6 +988,14 @@ class MainWindow:
             except (ValueError, IndexError) as e:
                 logger.error(f"Error handling dataset selection: {e}")
 
+    def _handle_dataset_reorder(self, drag_item, target_item, drop_y):
+        """Handle dataset reorder request from DatasetListPanel.
+        
+        This bridges between the panel's drag-and-drop UI and the existing
+        dataset reordering logic.
+        """
+        self._reorder_datasets(drag_item, target_item, drop_y)
+    
     def previous_dataset(self):
         """Navigate to previous dataset."""
         prev_id = self.dataset_manager.get_previous_dataset_id()
@@ -1613,21 +1462,18 @@ For more detailed help, please refer to the user manual or contact support."""
     def _clear_ui_for_no_datasets(self):
         """Clear UI elements when no datasets are available."""
         # Clear column combos
-        self.size_combo['values'] = []
-        self.frequency_combo['values'] = []
+        self.analysis_controls_panel.size_combo['values'] = []
         self.size_column_var.set('')
-        self.frequency_column_var.set('')
         
         # Clear stats
-        self.stats_text.delete(1.0, tk.END)
-        self.stats_text.insert(1.0, "No datasets loaded")
+        self.stats_panel.set_stats("No datasets loaded")
         
         # Clear tag editor
         self._update_tag_editor()
         
         # Clear treeview
-        for item in self.dataset_treeview.get_children():
-            self.dataset_treeview.delete(item)
+        for item in self.dataset_list_panel.treeview.get_children():
+            self.dataset_list_panel.treeview.delete(item)
         
         self._update_report_button_state()
         self._update_navigation_buttons_for_mode()  # Update navigation buttons including save graph
@@ -1673,15 +1519,11 @@ For more detailed help, please refer to the user manual or contact support."""
         self.data_mode_var.set(settings['data_mode'])
         self.bin_count_var.set(settings['bin_count'])
         self.size_column_var.set(settings['size_column'] or '')
-        self.frequency_column_var.set(settings['frequency_column'] or '')
         self.show_gaussian_fit_var.set(settings.get('show_gaussian_fit', True))
 
         # Update data processor mode
         data_processor = active_dataset['data_processor']
         data_processor.set_data_mode(settings['data_mode'])
-        
-        # Update UI elements
-        self._update_data_mode_ui()
     
     def _save_active_dataset_settings(self):
         """Save current UI settings to the active dataset."""
@@ -1693,7 +1535,6 @@ For more detailed help, please refer to the user manual or contact support."""
             'data_mode': self.data_mode_var.get(),
             'bin_count': self.bin_count_var.get(),
             'size_column': self.size_column_var.get(),
-            'frequency_column': self.frequency_column_var.get(),
             'show_stats_lines': self.show_stats_lines_var.get(),
             'show_gaussian_fit': self.show_gaussian_fit_var.get()
         }
@@ -1711,9 +1552,6 @@ For more detailed help, please refer to the user manual or contact support."""
         
         # Update data processor
         active_dataset['data_processor'].set_data_mode(mode)
-        
-        # Update UI
-        self._update_data_mode_ui()
         
         # Save settings
         self._save_active_dataset_settings()
@@ -1735,8 +1573,7 @@ For more detailed help, please refer to the user manual or contact support."""
         mode = self.data_mode_var.get()
         if mode == 'pre_aggregated':
             active_dataset['data_processor'].set_columns(
-                self.size_column_var.get(),
-                self.frequency_column_var.get()
+                self.size_column_var.get()
             )
         else:  # raw_measurements
             active_dataset['data_processor'].set_columns(
@@ -1753,52 +1590,30 @@ For more detailed help, please refer to the user manual or contact support."""
         if hasattr(self, 'canvas'):
             self._update_plot()
     
-    def _update_data_mode_ui(self):
-        """Update UI elements based on current data mode."""
-        mode = self.data_mode_var.get()
-        
-        if mode == 'raw_measurements':
-            # Hide frequency column selector for raw measurements
-            self.frequency_label.grid_remove()
-            self.frequency_combo.grid_remove()
-            # Clear frequency column selection
-            self.frequency_column_var.set('')
-        else:
-            # Show frequency column selector for pre-aggregated data
-            self.frequency_label.grid()
-            self.frequency_combo.grid()
-    
     def _update_column_combos(self):
         """Update the column selection comboboxes."""
         active_dataset = self.dataset_manager.get_active_dataset()
         if not active_dataset:
-            self.size_combo['values'] = []
-            self.frequency_combo['values'] = []
+            self.analysis_controls_panel.size_combo['values'] = []
             return
         
         columns = active_dataset['data_processor'].get_columns()
         
-        self.size_combo['values'] = columns
-        self.frequency_combo['values'] = columns
+        self.analysis_controls_panel.size_combo['values'] = columns
         
         # Set default selections if auto-detected
         data_processor = active_dataset['data_processor']
         if data_processor.size_column:
             self.size_column_var.set(data_processor.size_column)
-        if data_processor.frequency_column:
-            self.frequency_column_var.set(data_processor.frequency_column)
     
     def _update_stats_display(self):
         """Update the statistics display."""
         active_dataset = self.dataset_manager.get_active_dataset()
         if not active_dataset:
-            self.stats_text.delete(1.0, tk.END)
-            self.stats_text.insert(1.0, "No active dataset")
+            self.stats_panel.set_stats("No active dataset")
             return
         
         stats = active_dataset['data_processor'].get_data_stats()
-        
-        self.stats_text.delete(1.0, tk.END)
         
         # Dataset info
         stats_str = f"Dataset: {active_dataset['tag']}\n"
@@ -1827,7 +1642,7 @@ For more detailed help, please refer to the user manual or contact support."""
                     stats_str += f"  Total: {stats['total_frequency']:.0f}\n"
                     stats_str += f"  Mean: {stats['frequency_mean']:.2f}\n"
         
-        self.stats_text.insert(1.0, stats_str)
+        self.stats_panel.set_stats(stats_str)
     
     def _on_bin_entry_change(self, event):
         """Handle bin count entry field changes."""
@@ -1878,8 +1693,7 @@ For more detailed help, please refer to the user manual or contact support."""
         # Update column selections
         if mode == 'pre_aggregated':
             data_processor.set_columns(
-                self.size_column_var.get(),
-                self.frequency_column_var.get()
+                self.size_column_var.get()
             )
         else:  # raw_measurements
             data_processor.set_columns(
@@ -2146,83 +1960,20 @@ For more detailed help, please refer to the user manual or contact support."""
             has_gaussian_fit = (hasattr(self, 'canvas') and 
                             hasattr(self.plotter, 'get_last_gaussian_fit') and
                             self.plotter.get_last_gaussian_fit() is not None)
-            self.gaussian_info_btn.config(state='normal' if has_gaussian_fit else 'disabled')
-
-    def _on_treeview_button_press(self, event):
-        """Handle mouse button press on treeview - start drag operation."""
-        widget = event.widget
-        item = widget.identify_row(event.y)
-        
-        # Reset cursor first
-        widget.configure(cursor="")
-        
-        if item:
-            # Store drag information
-            self.drag_item = item
-            self.drag_start_y = event.y
-            
-            # Select the item being dragged if it's not already selected
-            if item not in widget.selection():
-                widget.selection_set(item)
-                # Also trigger the selection handler to make this dataset active
-                self._on_dataset_select(event)
-        else:
-            # Clear drag if clicking on empty space
-            self.drag_item = None
-            self.drag_start_y = None
-
-    def _on_treeview_drag_motion(self, event):
-        """Handle mouse motion during drag - provide visual feedback."""
-        if self.drag_item is None:
-            return
-        
-        # Check if we've moved enough to start dragging (prevent accidental drags)
-        if self.drag_start_y is not None and abs(event.y - self.drag_start_y) < 5:
-            return
-        
-        widget = event.widget
-        target_item = widget.identify_row(event.y)
-        
-        # Change cursor to indicate drag operation
-        if target_item and target_item != self.drag_item:
-            widget.configure(cursor="hand2")
-        else:
-            widget.configure(cursor="")
-
-    def _on_treeview_button_release(self, event):
-        """Handle mouse button release - complete drag operation."""
-        widget = event.widget
-        
-        # Always reset cursor
-        widget.configure(cursor="")
-        
-        if self.drag_item is None:
-            return
-        
-        target_item = widget.identify_row(event.y)
-        
-        # Only reorder if we have a valid target that's different from drag item
-        if target_item and target_item != self.drag_item:
-            # Check if we actually moved enough to constitute a drag
-            if self.drag_start_y is not None and abs(event.y - self.drag_start_y) >= 5:
-                self._reorder_datasets(self.drag_item, target_item, event.y)
-        
-        # Clean up drag state
-        self.drag_item = None
-        self.drag_start_y = None
+            self.analysis_controls_panel.gaussian_info_btn.config(state='normal' if has_gaussian_fit else 'disabled')
 
     def _reorder_datasets(self, drag_item, target_item, drop_y):
         """Reorder datasets in both treeview and dataset manager."""
         try:
             # Get the dataset IDs from the treeview items BY LOOKING UP THE ACTUAL DATA
-            all_items = list(self.dataset_treeview.get_children())
+            all_items = list(self.dataset_list_panel.treeview.get_children())
             
             # Create a mapping from treeview items to dataset IDs
             item_to_dataset_id = {}
             all_datasets = self.dataset_manager.get_all_datasets()
             
             for i, item in enumerate(all_items):
-                values = self.dataset_treeview.item(item, 'values')
+                values = self.dataset_list_panel.treeview.item(item, 'values')
                 if values and i < len(all_datasets):
                     # Match by tag and filename to find the correct dataset
                     tag, filename = values
@@ -2262,7 +2013,7 @@ For more detailed help, please refer to the user manual or contact support."""
             
             # Determine drop position (above or below target)
             try:
-                target_bbox = self.dataset_treeview.bbox(target_item)
+                target_bbox = self.dataset_list_panel.treeview.bbox(target_item)
                 if target_bbox:
                     target_center_y = target_bbox[1] + target_bbox[3] // 2
                     drop_above = drop_y < target_center_y
@@ -2305,14 +2056,14 @@ For more detailed help, please refer to the user manual or contact support."""
             
             # Maintain selection on the moved item
             # We need to find the new treeview item for this dataset
-            updated_items = list(self.dataset_treeview.get_children())
+            updated_items = list(self.dataset_list_panel.treeview.get_children())
             for item in updated_items:
-                values = self.dataset_treeview.item(item, 'values')
+                values = self.dataset_list_panel.treeview.item(item, 'values')
                 if values:
                     tag, filename = values
                     if tag == drag_dataset['tag'] and filename == drag_dataset['filename']:
-                        self.dataset_treeview.selection_set(item)
-                        self.dataset_treeview.see(item)
+                        self.dataset_list_panel.treeview.selection_set(item)
+                        self.dataset_list_panel.treeview.see(item)
                         break
             
             logger.info(f"Successfully reordered datasets from manager position {drag_index} to {new_position}")
