@@ -109,7 +109,7 @@ class DatasetManager:
                     'bin_count': bin_count,
                     'size_column': size_column,
                     'frequency_column': data_processor.frequency_column,
-                    'show_stats_lines': True,
+                    'show_stats_lines': False,
                     'show_gaussian_fit': True
                 }
             }

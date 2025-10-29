@@ -104,6 +104,17 @@ class ParticlePlotter:
                 bin_centers = (bins[:-1] + bins[1:]) / 2
                 bin_counts = n
             
+            # Calculate mode (bin with highest count) 
+            mode_index = np.argmax(n)
+            mode_bin_center = bin_centers[mode_index]
+            mode_bin_left = bins[mode_index]
+            mode_bin_right = bins[mode_index + 1]
+            mode_info = {
+                'center': mode_bin_center,
+                'left': mode_bin_left,
+                'right': mode_bin_right
+            }
+            
             self.ax.set_xlabel('Particle Size')
             self.ax.set_title(title)
             self.ax.grid(True, alpha=0.3)
@@ -131,9 +142,10 @@ class ParticlePlotter:
                 mean_size = fit_params['mean']
                 std_size = fit_params['stddev']
                 
-                # Add fit information to stats text
+               # Add fit information to stats text
                 stats_text = self._create_stats_text_with_gaussian(size_data, frequency_data, 
-                                                                 data_mode, gaussian_fit_result)
+                                                                 data_mode, gaussian_fit_result,
+                                                                 mode_info, metadata)
             else:
                 # Use traditional statistical calculation
                 if data_mode == "raw_measurements":
@@ -148,7 +160,8 @@ class ParticlePlotter:
                     std_size = np.std(size_data)
                 
                 # Add basic statistics to the plot
-                stats_text = self._create_basic_stats_text(size_data, frequency_data, data_mode)
+                stats_text = self._create_basic_stats_text(size_data, frequency_data, data_mode,
+                                                          mode_info, metadata)
             
             # Add statistical reference lines
             if show_stats_lines:
@@ -203,62 +216,96 @@ class ParticlePlotter:
     def _create_stats_text_with_gaussian(self, size_data: np.ndarray, 
                                     frequency_data: Optional[np.ndarray],
                                     data_mode: str, 
-                                    fit_result: Dict[str, Any]) -> str:
-        """Create statistics text including Gaussian fit parameters."""
+                                    fit_result: Dict[str, Any],
+                                    mode_info: Dict[str, float],
+                                    metadata: Optional[Dict[str, Any]]) -> str:
+        """Create statistics text including Gaussian fit parameters and metadata."""
         fit_params = fit_result['fitted_params']
-        fit_quality = fit_result['fit_quality']
-        stats = fit_result['statistics']
+        stats_text = ''
         
+        # Add metadata header
+        if metadata:
+            if metadata.get('bead_size'):
+                stats_text += f"Bead: {metadata['bead_size']} μm\n"
+            if metadata.get('serial_number'):
+                stats_text += f"S/N: {metadata['serial_number']}\n"
+            if metadata.get('filename'):
+                stats_text += f"File: {metadata['filename']}\n"
+            if metadata.get('timestamp'):
+                # Extract just the date (YYYY-MM-DD)
+                date_only = metadata['timestamp'].split(' ')[0]
+                stats_text += f"Date: {date_only}\n"
+            stats_text += '\n'  # Blank line separator
+        
+        # Statistical values
+        stats_text += f"Peak: {fit_params['mean']:.2f}\n"
+        stats_text += f"Mode: {mode_info['center']:.2f} ({mode_info['left']:.2f}-{mode_info['right']:.2f})\n"
+        stats_text += f"Std: {fit_params['stddev']:.2f}\n"
+        
+        # Total count
         if data_mode == "raw_measurements":
             n_measurements = len(size_data)
-            stats_text = f'Data: {n_measurements} measurements\n'
+            stats_text += f'Total: {n_measurements}'
         elif data_mode == "pre_aggregated" and frequency_data is not None:
             total_frequency = np.sum(frequency_data)
-            stats_text = f'Total Count: {total_frequency:.0f}\n'
+            stats_text += f'Total: {total_frequency:.0f}'
         else:
-            stats_text = f'N: {len(size_data)}\n'
-        
-        # Gaussian fit parameters
-        stats_text += f'Gaussian Fit:\n'
-        stats_text += f'  Peak: {fit_params["mean"]:.2f}\n'
-        stats_text += f'  σ: {fit_params["stddev"]:.2f}\n'
-        stats_text += f'  FWHM: {stats["fwhm"]:.2f}\n'
-        stats_text += f'  R²: {fit_quality["r_squared"]:.3f}\n'
-        stats_text += f'  χ²: {fit_quality["reduced_chi_squared"]:.2f}'
-        
-        # UPDATED: Add three-tier fit quality indicator
-        if self.gaussian_fitter:
-            quality_category = self.gaussian_fitter.get_fit_quality_category()
-            if quality_category == 'good':
-                stats_text += ' ✓'
-            elif quality_category == 'okay':
-                stats_text += ' ~'  # or use ≈ or ✓̃
-            else:  # poor
-                stats_text += ' ⚠'
+            stats_text += f'Total: {len(size_data)}'
         
         return stats_text
     
     def _create_basic_stats_text(self, size_data: np.ndarray, 
                                frequency_data: Optional[np.ndarray],
-                               data_mode: str) -> str:
+                               data_mode: str,
+                               mode_info: Dict[str, float],
+                               metadata: Optional[Dict[str, Any]]) -> str:
         """Create basic statistics text without Gaussian fit."""
+        stats_text = ''
+        
+        # Add metadata header
+        if metadata:
+            if metadata.get('bead_size'):
+                stats_text += f"Bead: {metadata['bead_size']} μm\n"
+            if metadata.get('serial_number'):
+                stats_text += f"S/N: {metadata['serial_number']}\n"
+            if metadata.get('filename'):
+                stats_text += f"File: {metadata['filename']}\n"
+            if metadata.get('timestamp'):
+                # Extract just the date (YYYY-MM-DD)
+                date_only = metadata['timestamp'].split(' ')[0]
+                stats_text += f"Date: {date_only}\n"
+            stats_text += '\n'  # Blank line separator
+        
+        # Calculate statistics
         if data_mode == "raw_measurements":
             mean_size = np.mean(size_data)
             std_size = np.std(size_data)
             n_measurements = len(size_data)
-            stats_text = f'Mean: {mean_size:.2f}\nStd: {std_size:.2f}\nN: {n_measurements}'
+            
+            stats_text += f'Mean: {mean_size:.2f}\n'
+            stats_text += f"Mode: {mode_info['center']:.2f} ({mode_info['left']:.2f}-{mode_info['right']:.2f})\n"
+            stats_text += f'Std: {std_size:.2f}\n'
+            stats_text += f'Total: {n_measurements}'
             
         elif data_mode == "pre_aggregated" and frequency_data is not None:
             mean_size = np.average(size_data, weights=frequency_data)
             variance = np.average((size_data - mean_size)**2, weights=frequency_data)
             std_size = np.sqrt(variance)
             total_frequency = np.sum(frequency_data)
-            stats_text = f'Mean: {mean_size:.2f}\nStd: {std_size:.2f}\nTotal: {total_frequency:.0f}'
+            
+            stats_text += f'Mean: {mean_size:.2f}\n'
+            stats_text += f"Mode: {mode_info['center']:.2f} ({mode_info['left']:.2f}-{mode_info['right']:.2f})\n"
+            stats_text += f'Std: {std_size:.2f}\n'
+            stats_text += f'Total: {total_frequency:.0f}'
             
         else:
             mean_size = np.mean(size_data)
             std_size = np.std(size_data)
-            stats_text = f'Mean: {mean_size:.2f}\nStd: {std_size:.2f}\nN: {len(size_data)}'
+            
+            stats_text += f'Mean: {mean_size:.2f}\n'
+            stats_text += f"Mode: {mode_info['center']:.2f} ({mode_info['left']:.2f}-{mode_info['right']:.2f})\n"
+            stats_text += f'Std: {std_size:.2f}\n'
+            stats_text += f'Total: {len(size_data)}'
         
         return stats_text
     
