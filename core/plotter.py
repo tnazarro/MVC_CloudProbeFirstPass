@@ -224,6 +224,19 @@ class ParticlePlotter:
         if metadata:
             if metadata.get('bead_size'):
                 stats_text += f"Bead: {metadata['bead_size']} μm\n"
+            
+            # Material - show placeholder if not available
+            if metadata.get('material'):
+                stats_text += f"Material: {metadata['material']}\n"
+            else:
+                stats_text += "Material: TBD\n"
+            
+            # Lot number - show placeholder if not available
+            if metadata.get('lot_number'):
+                stats_text += f"Lot: {metadata['lot_number']}\n"
+            else:
+                stats_text += "Lot: TBD\n"
+            
             if metadata.get('serial_number'):
                 stats_text += f"S/N: {metadata['serial_number']}\n"
             if metadata.get('filename'):
@@ -260,6 +273,19 @@ class ParticlePlotter:
         if metadata:
             if metadata.get('bead_size'):
                 stats_text += f"Bead: {metadata['bead_size']} μm\n"
+            
+            # Material - show placeholder if not available
+            if metadata.get('material'):
+                stats_text += f"Material: {metadata['material']}\n"
+            else:
+                stats_text += "Material: TBD\n"
+            
+            # Lot number - show placeholder if not available
+            if metadata.get('lot_number'):
+                stats_text += f"Lot: {metadata['lot_number']}\n"
+            else:
+                stats_text += "Lot: TBD\n"
+            
             if metadata.get('serial_number'):
                 stats_text += f"S/N: {metadata['serial_number']}\n"
             if metadata.get('filename'):
