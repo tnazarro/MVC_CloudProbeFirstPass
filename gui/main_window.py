@@ -549,7 +549,7 @@ class MainWindow:
             return True  # No datasets to clear, proceed
         
         dataset_count = self.dataset_manager.get_dataset_count()
-        dataset_names = [dataset['tag'] for dataset in self.dataset_manager.get_all_datasets()]
+        dataset_names = [dataset['tag'] for dataset in self.dataset_manager.get_all_datasets_ordered()]
         
         # Create confirmation message
         if dataset_count == 1:
@@ -1124,7 +1124,7 @@ class MainWindow:
             selected_item = selection[0]
             
             # Get all datasets and find the matching one by index
-            datasets = self.dataset_manager.get_all_datasets()
+            datasets = self.dataset_manager.get_all_datasets_ordered()
             
             # Get the index of the selected item in the treeview
             all_items = self.dataset_treeview.get_children()
@@ -2059,7 +2059,7 @@ For more detailed help, please refer to the user manual or contact support."""
         try:
             # Generate plots for all datasets
             figures = []
-            all_datasets = self.dataset_manager.get_all_datasets()
+            all_datasets = self.dataset_manager.get_all_datasets_ordered() #Use _ordered to maintain user order
             
             for dataset in all_datasets:
                 figure = self._generate_plot_for_dataset(dataset)
@@ -2126,7 +2126,7 @@ For more detailed help, please refer to the user manual or contact support."""
                 frequency_data=frequency_data,
                 bin_count=settings['bin_count'],
                 title=plot_title,
-                show_stats_lines=settings.get('show_stats_lines', True),
+                show_stats_lines=settings.get('show_stats_lines', False),
                 data_mode=settings['data_mode'],
                 show_gaussian_fit=settings.get('show_gaussian_fit', True),
                 metadata=metadata
@@ -2219,7 +2219,7 @@ For more detailed help, please refer to the user manual or contact support."""
             
             # Create a mapping from treeview items to dataset IDs
             item_to_dataset_id = {}
-            all_datasets = self.dataset_manager.get_all_datasets()
+            all_datasets = self.dataset_manager.get_all_datasets_ordered()
             
             for i, item in enumerate(all_items):
                 values = self.dataset_treeview.item(item, 'values')
@@ -2364,7 +2364,7 @@ For more detailed help, please refer to the user manual or contact support."""
 
     def debug_dataset_order(self):
         """Debug method to print current dataset order."""
-        datasets = self.dataset_manager.get_all_datasets()
+        datasets = self.dataset_manager.get_all_datasets_ordered()
         print("=== Current Dataset Order ===")
         for i, dataset in enumerate(datasets):
             print(f"{i}: {dataset['tag']} - {dataset['filename']}")
