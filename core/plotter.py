@@ -218,34 +218,8 @@ class ParticlePlotter:
                                     metadata: Optional[Dict[str, Any]]) -> str:
         """Create statistics text including Gaussian fit parameters and metadata."""
         fit_params = fit_result['fitted_params']
-        stats_text = ''
-        
-        # Add metadata header
-        if metadata:
-            if metadata.get('bead_size'):
-                stats_text += f"Bead: {metadata['bead_size']} μm\n"
-            
-            # Material - show placeholder if not available
-            if metadata.get('material'):
-                stats_text += f"Material: {metadata['material']}\n"
-            else:
-                stats_text += "Material: TBD\n"
-            
-            # Lot number - show placeholder if not available
-            if metadata.get('lot_number'):
-                stats_text += f"Lot: {metadata['lot_number']}\n"
-            else:
-                stats_text += "Lot: TBD\n"
-            
-            if metadata.get('serial_number'):
-                stats_text += f"S/N: {metadata['serial_number']}\n"
-            if metadata.get('filename'):
-                stats_text += f"File: {metadata['filename']}\n"
-            if metadata.get('timestamp'):
-                # Extract just the date (YYYY-MM-DD)
-                date_only = metadata['timestamp'].split(' ')[0]
-                stats_text += f"Date: {date_only}\n"
-            stats_text += '\n'  # Blank line separator
+
+        stats_text = self._create_metadata_header(metadata)
         
         # Statistical values
         stats_text += f"Peak: {fit_params['mean']:.2f}\n"
@@ -253,11 +227,7 @@ class ParticlePlotter:
         stats_text += f"Std: {fit_params['stddev']:.2f}\n"
         
         # Total count
-        if data_mode == "raw_measurements":
-            n_measurements = len(size_data)
-            stats_text += f'Total: {n_measurements}'
-        else:
-            stats_text += f'Total: {len(size_data)}'
+        stats_text += f'Total: {len(size_data)}'
         
         return stats_text
     
@@ -267,34 +237,7 @@ class ParticlePlotter:
                                mode_info: Dict[str, float],
                                metadata: Optional[Dict[str, Any]]) -> str:
         """Create basic statistics text without Gaussian fit."""
-        stats_text = ''
-        
-        # Add metadata header
-        if metadata:
-            if metadata.get('bead_size'):
-                stats_text += f"Bead: {metadata['bead_size']} μm\n"
-            
-            # Material - show placeholder if not available
-            if metadata.get('material'):
-                stats_text += f"Material: {metadata['material']}\n"
-            else:
-                stats_text += "Material: TBD\n"
-            
-            # Lot number - show placeholder if not available
-            if metadata.get('lot_number'):
-                stats_text += f"Lot: {metadata['lot_number']}\n"
-            else:
-                stats_text += "Lot: TBD\n"
-            
-            if metadata.get('serial_number'):
-                stats_text += f"S/N: {metadata['serial_number']}\n"
-            if metadata.get('filename'):
-                stats_text += f"File: {metadata['filename']}\n"
-            if metadata.get('timestamp'):
-                # Extract just the date (YYYY-MM-DD)
-                date_only = metadata['timestamp'].split(' ')[0]
-                stats_text += f"Date: {date_only}\n"
-            stats_text += '\n'  # Blank line separator
+        stats_text = self._create_metadata_header(metadata)
         
         # Calculate statistics
         if data_mode == "raw_measurements":
@@ -329,6 +272,37 @@ class ParticlePlotter:
         
         return stats_text
     
+    def _create_metadata_header(self, metadata: Optional[Dict[str, Any]]) -> str:
+        """Create metadata header text for statistics display."""
+        if not metadata:
+            return ''
+        
+        header_text = ''
+        
+        if metadata.get('bead_size'):
+            header_text += f"Bead: {metadata['bead_size']} μm\n"
+        
+        if metadata.get('material'):
+            header_text += f"Material: {metadata['material']}\n"
+        else:
+            header_text += "Material: TBD\n"
+        
+        if metadata.get('lot_number'):
+            header_text += f"Lot: {metadata['lot_number']}\n"
+        else:
+            header_text += "Lot: TBD\n"
+        
+        if metadata.get('serial_number'):
+            header_text += f"S/N: {metadata['serial_number']}\n"
+        if metadata.get('filename'):
+            header_text += f"File: {metadata['filename']}\n"
+        if metadata.get('timestamp'):
+            date_only = metadata['timestamp'].split(' ')[0]
+            header_text += f"Date: {date_only}\n"
+        
+        header_text += '\n'
+        return header_text
+
     def _add_statistical_lines(self, mean: float, std: float):
         """Add vertical lines for mean and standard deviations."""
         try:
