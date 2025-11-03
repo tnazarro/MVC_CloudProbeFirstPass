@@ -350,7 +350,7 @@ class MainWindow:
     
     def _show_config_warning_banner(self):
         """Show persistent config warning in queue status area."""
-        self.queue_status_label.config(
+        self.queue_status_panel.set_status(
             text="⚠️  Config: Using Built-in Defaults (may be outdated)",
             foreground='red',
             font=FONT_STATUS
