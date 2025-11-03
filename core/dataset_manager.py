@@ -109,7 +109,7 @@ class DatasetManager:
                     'bin_count': bin_count,
                     'size_column': size_column,
                     'frequency_column': data_processor.frequency_column,
-                    'show_stats_lines': True,
+                    'show_stats_lines': False,
                     'show_gaussian_fit': True
                 }
             }
@@ -185,13 +185,13 @@ class DatasetManager:
         """Get a specific dataset by ID."""
         return self.datasets.get(dataset_id)
     
-    def get_all_datasets(self) -> List[Dict[str, Any]]:
+    def get_all_datasets_by_load_time(self) -> List[Dict[str, Any]]:
         """Get all datasets as a list, ordered by load time."""
         return sorted(self.datasets.values(), key=lambda x: x['loaded_at'])
     
     def get_dataset_ids(self) -> List[str]:
         """Get all dataset IDs, ordered by load time."""
-        sorted_datasets = self.get_all_datasets()
+        sorted_datasets = self.get_all_datasets_by_load_time()
         return [dataset['id'] for dataset in sorted_datasets]
     
     def update_dataset_tag(self, dataset_id: str, new_tag: str) -> bool:
@@ -270,5 +270,6 @@ class DatasetManager:
         return list(self.datasets.keys())
 
     def get_all_datasets_ordered(self) -> List[Dict[str, Any]]:
-        """Get all datasets in the order they appear in the internal dictionary."""
+        """Get all datasets in the order they appear in the internal dictionary.
+        This respects the order maintained by drag-and-drop reordering in the UI."""
         return list(self.datasets.values())

@@ -104,6 +104,17 @@ class ParticlePlotter:
                 bin_centers = (bins[:-1] + bins[1:]) / 2
                 bin_counts = n
             
+            # Calculate mode (bin with highest count) 
+            mode_index = np.argmax(n)
+            mode_bin_center = bin_centers[mode_index]
+            mode_bin_left = bins[mode_index]
+            mode_bin_right = bins[mode_index + 1]
+            mode_info = {
+                'center': mode_bin_center,
+                'left': mode_bin_left,
+                'right': mode_bin_right
+            }
+            
             self.ax.set_xlabel('Particle Size')
             self.ax.set_title(title)
             self.ax.grid(True, alpha=0.3)
@@ -131,9 +142,10 @@ class ParticlePlotter:
                 mean_size = fit_params['mean']
                 std_size = fit_params['stddev']
                 
-                # Add fit information to stats text
+               # Add fit information to stats text
                 stats_text = self._create_stats_text_with_gaussian(size_data, frequency_data, 
-                                                                 data_mode, gaussian_fit_result)
+                                                                 data_mode, gaussian_fit_result,
+                                                                 mode_info, metadata)
             else:
                 # Use traditional statistical calculation
                 if data_mode == "raw_measurements":
@@ -148,7 +160,8 @@ class ParticlePlotter:
                     std_size = np.std(size_data)
                 
                 # Add basic statistics to the plot
-                stats_text = self._create_basic_stats_text(size_data, frequency_data, data_mode)
+                stats_text = self._create_basic_stats_text(size_data, frequency_data, data_mode,
+                                                          mode_info, metadata)
             
             # Add statistical reference lines
             if show_stats_lines:
@@ -163,10 +176,7 @@ class ParticlePlotter:
             if show_gaussian_fit and gaussian_fit_result and gaussian_fit_result['success']:
                 self.ax.legend(loc='upper right', fontsize=9)
             
-            self.figure.tight_layout(rect=[0, 0.06, 1, 1])
-
-            if metadata:
-                self._add_metadata_footer(metadata)
+            self.figure.tight_layout()
 
             logger.info(f"Created histogram with {bin_count} bins")
             
@@ -203,65 +213,96 @@ class ParticlePlotter:
     def _create_stats_text_with_gaussian(self, size_data: np.ndarray, 
                                     frequency_data: Optional[np.ndarray],
                                     data_mode: str, 
-                                    fit_result: Dict[str, Any]) -> str:
-        """Create statistics text including Gaussian fit parameters."""
+                                    fit_result: Dict[str, Any],
+                                    mode_info: Dict[str, float],
+                                    metadata: Optional[Dict[str, Any]]) -> str:
+        """Create statistics text including Gaussian fit parameters and metadata."""
         fit_params = fit_result['fitted_params']
-        fit_quality = fit_result['fit_quality']
-        stats = fit_result['statistics']
+
+        stats_text = self._create_metadata_header(metadata)
         
-        if data_mode == "raw_measurements":
-            n_measurements = len(size_data)
-            stats_text = f'Data: {n_measurements} measurements\n'
-        elif data_mode == "pre_aggregated" and frequency_data is not None:
-            total_frequency = np.sum(frequency_data)
-            stats_text = f'Total Count: {total_frequency:.0f}\n'
-        else:
-            stats_text = f'N: {len(size_data)}\n'
+        # Statistical values
+        stats_text += f"Peak: {fit_params['mean']:.2f}\n"
+        stats_text += f"Mode: {mode_info['center']:.2f} ({mode_info['left']:.2f}-{mode_info['right']:.2f})\n"
+        stats_text += f"Std: {fit_params['stddev']:.2f}\n"
         
-        # Gaussian fit parameters
-        stats_text += f'Gaussian Fit:\n'
-        stats_text += f'  Peak: {fit_params["mean"]:.2f}\n'
-        stats_text += f'  σ: {fit_params["stddev"]:.2f}\n'
-        stats_text += f'  FWHM: {stats["fwhm"]:.2f}\n'
-        stats_text += f'  R²: {fit_quality["r_squared"]:.3f}\n'
-        stats_text += f'  χ²: {fit_quality["reduced_chi_squared"]:.2f}'
-        
-        # UPDATED: Add three-tier fit quality indicator
-        if self.gaussian_fitter:
-            quality_category = self.gaussian_fitter.get_fit_quality_category()
-            if quality_category == 'good':
-                stats_text += ' ✓'
-            elif quality_category == 'okay':
-                stats_text += ' ~'  # or use ≈ or ✓̃
-            else:  # poor
-                stats_text += ' ⚠'
+        # Total count
+        stats_text += f'Total: {len(size_data)}'
         
         return stats_text
     
     def _create_basic_stats_text(self, size_data: np.ndarray, 
                                frequency_data: Optional[np.ndarray],
-                               data_mode: str) -> str:
+                               data_mode: str,
+                               mode_info: Dict[str, float],
+                               metadata: Optional[Dict[str, Any]]) -> str:
         """Create basic statistics text without Gaussian fit."""
+        stats_text = self._create_metadata_header(metadata)
+        
+        # Calculate statistics
         if data_mode == "raw_measurements":
             mean_size = np.mean(size_data)
             std_size = np.std(size_data)
             n_measurements = len(size_data)
-            stats_text = f'Mean: {mean_size:.2f}\nStd: {std_size:.2f}\nN: {n_measurements}'
+            
+            stats_text += f'Mean: {mean_size:.2f}\n'
+            stats_text += f"Mode: {mode_info['center']:.2f} ({mode_info['left']:.2f}-{mode_info['right']:.2f})\n"
+            stats_text += f'Std: {std_size:.2f}\n'
+            stats_text += f'Total: {n_measurements}'
             
         elif data_mode == "pre_aggregated" and frequency_data is not None:
             mean_size = np.average(size_data, weights=frequency_data)
             variance = np.average((size_data - mean_size)**2, weights=frequency_data)
             std_size = np.sqrt(variance)
             total_frequency = np.sum(frequency_data)
-            stats_text = f'Mean: {mean_size:.2f}\nStd: {std_size:.2f}\nTotal: {total_frequency:.0f}'
+            
+            stats_text += f'Mean: {mean_size:.2f}\n'
+            stats_text += f"Mode: {mode_info['center']:.2f} ({mode_info['left']:.2f}-{mode_info['right']:.2f})\n"
+            stats_text += f'Std: {std_size:.2f}\n'
+            stats_text += f'Total: {total_frequency:.0f}'
             
         else:
             mean_size = np.mean(size_data)
             std_size = np.std(size_data)
-            stats_text = f'Mean: {mean_size:.2f}\nStd: {std_size:.2f}\nN: {len(size_data)}'
+            
+            stats_text += f'Mean: {mean_size:.2f}\n'
+            stats_text += f"Mode: {mode_info['center']:.2f} ({mode_info['left']:.2f}-{mode_info['right']:.2f})\n"
+            stats_text += f'Std: {std_size:.2f}\n'
+            stats_text += f'Total: {len(size_data)}'
         
         return stats_text
     
+    def _create_metadata_header(self, metadata: Optional[Dict[str, Any]]) -> str:
+        """Create metadata header text for statistics display."""
+        if not metadata:
+            return ''
+        
+        header_text = ''
+        
+        if metadata.get('bead_size'):
+            header_text += f"Bead: {metadata['bead_size']} μm\n"
+        
+        if metadata.get('material'):
+            header_text += f"Material: {metadata['material']}\n"
+        else:
+            header_text += "Material: TBD\n"
+        
+        if metadata.get('lot_number'):
+            header_text += f"Lot: {metadata['lot_number']}\n"
+        else:
+            header_text += "Lot: TBD\n"
+        
+        if metadata.get('serial_number'):
+            header_text += f"S/N: {metadata['serial_number']}\n"
+        if metadata.get('filename'):
+            header_text += f"File: {metadata['filename']}\n"
+        if metadata.get('timestamp'):
+            date_only = metadata['timestamp'].split(' ')[0]
+            header_text += f"Date: {date_only}\n"
+        
+        header_text += '\n'
+        return header_text
+
     def _add_statistical_lines(self, mean: float, std: float):
         """Add vertical lines for mean and standard deviations."""
         try:
@@ -337,34 +378,3 @@ class ParticlePlotter:
         return self.create_histogram(size_data, frequency_data, new_bin_count, 
                                    show_stats_lines=show_stats_lines)
     
-    def _add_metadata_footer(self, metadata: Dict[str, Any]) -> None:
-        """Add metadata text footer below the plot."""
-        # Build metadata string
-        parts = []
-        
-        if metadata.get('serial_number'):
-            parts.append(f"S/N: {metadata['serial_number']}")
-        
-        if metadata.get('bead_size'):
-            parts.append(f"Bead: {metadata['bead_size']} μm")
-        
-        if metadata.get('filename'):
-            parts.append(f"File: {metadata['filename']}")
-        
-        if metadata.get('timestamp'):
-            parts.append(f"Time: {metadata['timestamp']}")
-        
-        # Material and lot will be added when config system is ready
-        if metadata.get('material'):
-            parts.append(f"Material: {metadata['material']}")
-        
-        if metadata.get('lot_number'):
-            parts.append(f"Lot: {metadata['lot_number']}")
-        
-        if parts:
-            metadata_text = " | ".join(parts)
-            # Place text at bottom center, outside the axes
-            self.figure.text(0.5, 0.005, metadata_text, 
-                            ha='center', va='bottom',
-                            fontsize=8, style='italic',
-                            bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.3))
