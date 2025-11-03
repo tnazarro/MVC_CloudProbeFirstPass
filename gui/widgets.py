@@ -268,12 +268,17 @@ class DatasetManagementPanel(ttk.LabelFrame):
                  on_reset_config: Callable,
                  on_edit_notes: Callable,
                  on_remove: Callable,
+                 on_clear_all: Callable,
                  on_help: Callable,
                  **kwargs):
         super().__init__(parent, text="Dataset Management", padding=5, **kwargs)
         
+        # Row 1: Configuration and editing actions
+        row1_frame = ttk.Frame(self)
+        row1_frame.pack(fill='x', pady=(0, 5))
+        
         self.reset_config_btn = ttk.Button(
-            self,
+            row1_frame,
             text="Reset to Config Defaults",
             command=on_reset_config,
             state='disabled'
@@ -281,23 +286,35 @@ class DatasetManagementPanel(ttk.LabelFrame):
         self.reset_config_btn.pack(side='left', padx=(0, 5))
         
         self.edit_notes_btn = ttk.Button(
-            self,
+            row1_frame,
             text="Edit Notes",
             command=on_edit_notes,
             state='disabled'
         )
         self.edit_notes_btn.pack(side='left', padx=(0, 5))
         
+        # Row 2: Destructive actions and help
+        row2_frame = ttk.Frame(self)
+        row2_frame.pack(fill='x')
+        
         self.remove_dataset_btn = ttk.Button(
-            self,
+            row2_frame,
             text="Remove",
             command=on_remove,
             state='disabled'
         )
         self.remove_dataset_btn.pack(side='left', padx=(0, 5))
         
+        self.clear_all_btn = ttk.Button(
+            row2_frame,
+            text="Clear All",
+            command=on_clear_all,
+            state='disabled'
+        )
+        self.clear_all_btn.pack(side='left', padx=(0, 5))
+        
         self.help_btn = ttk.Button(
-            self,
+            row2_frame,
             text="?",
             width=3,
             command=on_help

@@ -239,6 +239,7 @@ class MainWindow:
             on_reset_config=self.reset_to_config_defaults,
             on_edit_notes=self.edit_dataset_notes,
             on_remove=self.remove_dataset,
+            on_clear_all=self.clear_all_datasets,
             on_help=self.show_help_dialog
         )
         self.dataset_mgmt_panel.pack(fill='x', pady=5)
@@ -956,6 +957,7 @@ class MainWindow:
         self.dataset_mgmt_panel.edit_notes_btn.config(state='normal' if has_datasets else 'disabled')
         self.dataset_mgmt_panel.reset_config_btn.config(state='normal' if has_datasets else 'disabled')
         self.dataset_mgmt_panel.remove_dataset_btn.config(state='normal' if has_datasets else 'disabled')
+        self.dataset_mgmt_panel.clear_all_btn.config(state='normal' if has_datasets else 'disabled')
 
     def _on_dataset_select(self, event=None):
         """Handle dataset selection from treeview."""
@@ -1459,6 +1461,35 @@ For more detailed help, please refer to the user manual or contact support."""
                 # No datasets left
                 self._clear_ui_for_no_datasets()
     
+    def clear_all_datasets(self):
+        """Clear all loaded datasets."""
+        if not self.dataset_manager.has_datasets():
+            logger.warning("clear_all_datasets called with no datasets loaded")
+            return
+        
+        dataset_count = self.dataset_manager.get_dataset_count()
+        dataset_names = [dataset['tag'] for dataset in self.dataset_manager.get_all_datasets_ordered()]
+        
+        if dataset_count == 1:
+            message = f"This will remove the currently loaded dataset:\n• {dataset_names[0]}\n\nContinue?"
+        else:
+            dataset_list = '\n'.join([f"• {name}" for name in dataset_names[:5]])
+            if dataset_count > 5:
+                dataset_list += f"\n• ... and {dataset_count - 5} more"
+            message = f"This will remove all {dataset_count} loaded datasets:\n\n{dataset_list}\n\nContinue?"
+        
+        result = messagebox.askyesno(
+            "Clear All Datasets",
+            message,
+            icon='warning'
+        )
+        
+        if result:
+            self.dataset_manager.clear_all_datasets()
+            self._clear_ui_for_no_datasets()
+            self.scrollable_frame.update_scroll_region()
+            logger.info(f"Cleared all {dataset_count} datasets")
+
     def _clear_ui_for_no_datasets(self):
         """Clear UI elements when no datasets are available."""
         # Clear column combos
