@@ -70,7 +70,10 @@ class ScrollableFrame(ttk.Frame):
         # Bind events
         self.scrollable_frame.bind("<Configure>", self._on_frame_configure)
         self.canvas.bind("<Configure>", self._on_canvas_configure)
-        self.bind_all("<MouseWheel>", self._on_mousewheel)
+        
+        # Bind mousewheel only when mouse is over this canvas
+        self.canvas.bind("<Enter>", lambda e: self.canvas.bind_all("<MouseWheel>", self._on_mousewheel))
+        self.canvas.bind("<Leave>", lambda e: self.canvas.unbind_all("<MouseWheel>"))
 
     def update_scroll_region(self):
         """Manually update the scroll region - useful when content changes."""
@@ -240,6 +243,7 @@ class MainWindow:
             on_reset_config=self.reset_to_config_defaults,
             on_edit_notes=self.edit_dataset_notes,
             on_remove=self.remove_dataset,
+            on_clear_all=self.clear_all_datasets,
             on_help=self.show_help_dialog
         )
         self.dataset_mgmt_panel.pack(fill='x', pady=5)
@@ -351,28 +355,20 @@ class MainWindow:
     
     def _show_config_warning_banner(self):
         """Show persistent config warning in queue status area."""
-        self.queue_status_label.config(
+        self.queue_status_panel.set_status(
             text="⚠️  Config: Using Built-in Defaults (may be outdated)",
-            foreground='red',
-            font=FONT_STATUS
+            foreground='red'
         )
         logger.info("Displaying config warning banner")
 
     def _load_for_calibration(self):
         """Direct calibration loading - sets mode and loads single file."""
-        # Check if we need to clear existing datasets
-        if not self._confirm_clear_datasets_if_needed():
-            return  # User cancelled
-            
         self.analysis_mode_var.set('calibration')
         self._update_analysis_mode_ui()
         self.load_multiple_files()
         
     def _load_for_verification(self):
         """Direct verification loading - sets mode and loads multiple files."""
-        if not self._confirm_clear_datasets_if_needed():
-            return  # User cancelled
-     
         self.analysis_mode_var.set('verification') 
         self._update_analysis_mode_ui()
         self.load_multiple_files()
@@ -689,6 +685,9 @@ class MainWindow:
             messagebox.showinfo("Queue Complete", "No files to process.")
             return
         
+        # Track initial dataset count for summary message
+        self._initial_dataset_count = self.dataset_manager.get_dataset_count()
+        
         # Process the first file
         self._process_current_queue_file()
 
@@ -806,13 +805,20 @@ class MainWindow:
     def _finish_queue_processing(self):
         """Finish queue processing and show summary."""
         summary = self.file_queue.get_summary()
+        current_total = self.dataset_manager.get_dataset_count()
         
         summary_text = f"Queue Processing Complete!\n\n"
         summary_text += f"Total files: {summary['total_files']}\n"
         summary_text += f"Successfully loaded: {summary['processed']}\n"
         summary_text += f"Failed: {summary['failed']}\n"
         summary_text += f"Skipped: {summary['skipped']}\n"
-        summary_text += f"Success rate: {summary['success_rate']:.1f}%"
+        summary_text += f"Success rate: {summary['success_rate']:.1f}%\n\n"
+        
+        # Show append info
+        if self._initial_dataset_count > 0:
+            summary_text += f"Added {summary['processed']} datasets ({current_total} total now loaded)"
+        else:
+            summary_text += f"Loaded {current_total} datasets"
         
         messagebox.showinfo("Queue Complete", summary_text)
         self._update_queue_status()
@@ -957,6 +963,7 @@ class MainWindow:
         self.dataset_mgmt_panel.edit_notes_btn.config(state='normal' if has_datasets else 'disabled')
         self.dataset_mgmt_panel.reset_config_btn.config(state='normal' if has_datasets else 'disabled')
         self.dataset_mgmt_panel.remove_dataset_btn.config(state='normal' if has_datasets else 'disabled')
+        self.dataset_mgmt_panel.clear_all_btn.config(state='normal' if has_datasets else 'disabled')
 
     def _on_dataset_select(self, event=None):
         """Handle dataset selection from treeview."""
@@ -1460,6 +1467,34 @@ For more detailed help, please refer to the user manual or contact support."""
                 # No datasets left
                 self._clear_ui_for_no_datasets()
     
+    def clear_all_datasets(self):
+        """Clear all loaded datasets."""
+        if not self.dataset_manager.has_datasets():
+            return
+        
+        dataset_count = self.dataset_manager.get_dataset_count()
+        dataset_names = [dataset['tag'] for dataset in self.dataset_manager.get_all_datasets_ordered()]
+        
+        if dataset_count == 1:
+            message = f"This will remove the currently loaded dataset:\n• {dataset_names[0]}\n\nContinue?"
+        else:
+            dataset_list = '\n'.join([f"• {name}" for name in dataset_names[:5]])
+            if dataset_count > 5:
+                dataset_list += f"\n• ... and {dataset_count - 5} more"
+            message = f"This will remove all {dataset_count} loaded datasets:\n\n{dataset_list}\n\nContinue?"
+        
+        result = messagebox.askyesno(
+            "Clear All Datasets",
+            message,
+            icon='warning'
+        )
+        
+        if result:
+            self.dataset_manager.clear_all_datasets()
+            self._clear_ui_for_no_datasets()
+            self.scrollable_frame.update_scroll_region()
+            logger.info(f"Cleared all {dataset_count} datasets")
+
     def _clear_ui_for_no_datasets(self):
         """Clear UI elements when no datasets are available."""
         # Clear column combos
@@ -1615,33 +1650,29 @@ For more detailed help, please refer to the user manual or contact support."""
             return
         
         stats = active_dataset['data_processor'].get_data_stats()
+        instrument_info = stats.get('instrument_info', {})
         
         # Dataset info
         stats_str = f"Dataset: {active_dataset['tag']}\n"
         stats_str += f"File: {active_dataset['filename']}\n"
-        stats_str += f"Instrument: {stats.get('instrument_info', {}).get('name', 'Unknown')}\n"
-        stats_str += f"Serial Number: {self.dataset_manager.instrument_serial_number or 'Not set'}\n"
+        stats_str += f"Instrument: {instrument_info.get('name', 'Unknown')}\n"
         stats_str += f"Rows: {stats.get('total_rows', 'N/A')}\n"
         stats_str += f"Columns: {stats.get('total_columns', 'N/A')}\n"
         stats_str += f"Mode: {stats.get('data_mode', 'N/A')}\n"
         
+        # Firmware and software versions
+        firmware_version = instrument_info.get('version', 'N/A')
+        pads_version = instrument_info.get('pads_version', 'N/A')
+        stats_str += f"\nFirmware Version: {firmware_version}\n"
+        stats_str += f"PADS Version: {pads_version}\n"
+        stats_str += f"Time Duration: N/A\n"
+        
+        # Size statistics
         if 'size_min' in stats:
             stats_str += f"\nSize Range:\n"
             stats_str += f"  Min: {stats['size_min']:.3f}\n"
             stats_str += f"  Max: {stats['size_max']:.3f}\n"
             stats_str += f"  Mean: {stats['size_mean']:.3f}\n"
-            
-            # Add mode-specific stats
-            if stats.get('data_mode') == 'raw_measurements':
-                if 'unique_measurements' in stats:
-                    stats_str += f"\nMeasurements:\n"
-                    stats_str += f"  Total: {stats['total_measurements']}\n"
-                    stats_str += f"  Unique: {stats['unique_measurements']}\n"
-            elif stats.get('data_mode') == 'pre_aggregated':
-                if 'total_frequency' in stats:
-                    stats_str += f"\nFrequency:\n"
-                    stats_str += f"  Total: {stats['total_frequency']:.0f}\n"
-                    stats_str += f"  Mean: {stats['frequency_mean']:.2f}\n"
         
         self.stats_panel.set_stats(stats_str)
     
