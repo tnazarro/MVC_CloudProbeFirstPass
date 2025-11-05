@@ -8,6 +8,8 @@ from config.constants import CONFIG_VALIDATION_SCHEMA, DEFAULT_BIN_COUNT
 
 logger = logging.getLogger(__name__)
 
+#working on config.json in addition to this file
+
 class ConfigManager:
     def __init__(self, config_path: str = "config.json"):
         self.config_path = Path(config_path)
