@@ -364,8 +364,7 @@ class MainWindow:
         """Show persistent config warning in queue status area."""
         self.queue_status_panel.set_status(
             text="⚠️  Config: Using Built-in Defaults (may be outdated)",
-            foreground='red',
-            font=FONT_STATUS
+            foreground='red'
         )
         logger.info("Displaying config warning banner")
 
