@@ -71,16 +71,8 @@ class ScrollableFrame(ttk.Frame):
         self.canvas.bind("<Configure>", self._on_canvas_configure)
         
         # Bind mousewheel only when mouse is over this canvas
-        self.canvas.bind("<Enter>", self._bind_mousewheel)
-        self.canvas.bind("<Leave>", self._unbind_mousewheel)
-
-    def _bind_mousewheel(self, event):
-        """Bind mousewheel to this canvas when mouse enters."""
-        self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
-    
-    def _unbind_mousewheel(self, event):
-        """Unbind mousewheel when mouse leaves."""
-        self.canvas.unbind_all("<MouseWheel>")
+        self.canvas.bind("<Enter>", lambda e: self.canvas.bind_all("<MouseWheel>", self._on_mousewheel))
+        self.canvas.bind("<Leave>", lambda e: self.canvas.unbind_all("<MouseWheel>"))
 
     def update_scroll_region(self):
         """Manually update the scroll region - useful when content changes."""
@@ -1477,7 +1469,6 @@ For more detailed help, please refer to the user manual or contact support."""
     def clear_all_datasets(self):
         """Clear all loaded datasets."""
         if not self.dataset_manager.has_datasets():
-            logger.warning("clear_all_datasets called with no datasets loaded")
             return
         
         dataset_count = self.dataset_manager.get_dataset_count()
