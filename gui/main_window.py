@@ -360,19 +360,12 @@ class MainWindow:
 
     def _load_for_calibration(self):
         """Direct calibration loading - sets mode and loads single file."""
-        # Check if we need to clear existing datasets
-        if not self._confirm_clear_datasets_if_needed():
-            return  # User cancelled
-            
         self.analysis_mode_var.set('calibration')
         self._update_analysis_mode_ui()
         self.load_multiple_files()
         
     def _load_for_verification(self):
         """Direct verification loading - sets mode and loads multiple files."""
-        if not self._confirm_clear_datasets_if_needed():
-            return  # User cancelled
-     
         self.analysis_mode_var.set('verification') 
         self._update_analysis_mode_ui()
         self.load_multiple_files()
@@ -689,6 +682,9 @@ class MainWindow:
             messagebox.showinfo("Queue Complete", "No files to process.")
             return
         
+        # Track initial dataset count for summary message
+        self._initial_dataset_count = self.dataset_manager.get_dataset_count()
+        
         # Process the first file
         self._process_current_queue_file()
 
@@ -806,13 +802,20 @@ class MainWindow:
     def _finish_queue_processing(self):
         """Finish queue processing and show summary."""
         summary = self.file_queue.get_summary()
+        current_total = self.dataset_manager.get_dataset_count()
         
         summary_text = f"Queue Processing Complete!\n\n"
         summary_text += f"Total files: {summary['total_files']}\n"
         summary_text += f"Successfully loaded: {summary['processed']}\n"
         summary_text += f"Failed: {summary['failed']}\n"
         summary_text += f"Skipped: {summary['skipped']}\n"
-        summary_text += f"Success rate: {summary['success_rate']:.1f}%"
+        summary_text += f"Success rate: {summary['success_rate']:.1f}%\n\n"
+        
+        # Show append info
+        if self._initial_dataset_count > 0:
+            summary_text += f"Added {summary['processed']} datasets ({current_total} total now loaded)"
+        else:
+            summary_text += f"Loaded {current_total} datasets"
         
         messagebox.showinfo("Queue Complete", summary_text)
         self._update_queue_status()
@@ -1645,33 +1648,29 @@ For more detailed help, please refer to the user manual or contact support."""
             return
         
         stats = active_dataset['data_processor'].get_data_stats()
+        instrument_info = stats.get('instrument_info', {})
         
         # Dataset info
         stats_str = f"Dataset: {active_dataset['tag']}\n"
         stats_str += f"File: {active_dataset['filename']}\n"
-        stats_str += f"Instrument: {stats.get('instrument_info', {}).get('name', 'Unknown')}\n"
-        stats_str += f"Serial Number: {self.dataset_manager.instrument_serial_number or 'Not set'}\n"
+        stats_str += f"Instrument: {instrument_info.get('name', 'Unknown')}\n"
         stats_str += f"Rows: {stats.get('total_rows', 'N/A')}\n"
         stats_str += f"Columns: {stats.get('total_columns', 'N/A')}\n"
         stats_str += f"Mode: {stats.get('data_mode', 'N/A')}\n"
         
+        # Firmware and software versions
+        firmware_version = instrument_info.get('version', 'N/A')
+        pads_version = instrument_info.get('pads_version', 'N/A')
+        stats_str += f"\nFirmware Version: {firmware_version}\n"
+        stats_str += f"PADS Version: {pads_version}\n"
+        stats_str += f"Time Duration: N/A\n"
+        
+        # Size statistics
         if 'size_min' in stats:
             stats_str += f"\nSize Range:\n"
             stats_str += f"  Min: {stats['size_min']:.3f}\n"
             stats_str += f"  Max: {stats['size_max']:.3f}\n"
             stats_str += f"  Mean: {stats['size_mean']:.3f}\n"
-            
-            # Add mode-specific stats
-            if stats.get('data_mode') == 'raw_measurements':
-                if 'unique_measurements' in stats:
-                    stats_str += f"\nMeasurements:\n"
-                    stats_str += f"  Total: {stats['total_measurements']}\n"
-                    stats_str += f"  Unique: {stats['unique_measurements']}\n"
-            elif stats.get('data_mode') == 'pre_aggregated':
-                if 'total_frequency' in stats:
-                    stats_str += f"\nFrequency:\n"
-                    stats_str += f"  Total: {stats['total_frequency']:.0f}\n"
-                    stats_str += f"  Mean: {stats['frequency_mean']:.2f}\n"
         
         self.stats_panel.set_stats(stats_str)
     
