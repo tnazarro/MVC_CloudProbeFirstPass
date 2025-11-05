@@ -69,7 +69,18 @@ class ScrollableFrame(ttk.Frame):
         # Bind events
         self.scrollable_frame.bind("<Configure>", self._on_frame_configure)
         self.canvas.bind("<Configure>", self._on_canvas_configure)
-        self.bind_all("<MouseWheel>", self._on_mousewheel)
+        
+        # Bind mousewheel only when mouse is over this canvas
+        self.canvas.bind("<Enter>", self._bind_mousewheel)
+        self.canvas.bind("<Leave>", self._unbind_mousewheel)
+
+    def _bind_mousewheel(self, event):
+        """Bind mousewheel to this canvas when mouse enters."""
+        self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+    
+    def _unbind_mousewheel(self, event):
+        """Unbind mousewheel when mouse leaves."""
+        self.canvas.unbind_all("<MouseWheel>")
 
     def update_scroll_region(self):
         """Manually update the scroll region - useful when content changes."""
