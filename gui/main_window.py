@@ -362,12 +362,24 @@ class MainWindow:
 
     def _load_for_calibration(self):
         """Direct calibration loading - sets mode and loads single file."""
+        current_mode = self.analysis_mode_var.get()
+        
+        if current_mode != 'calibration' and self.dataset_manager.has_datasets():
+            if not self._confirm_clear_datasets_if_needed():
+                return
+        
         self.analysis_mode_var.set('calibration')
         self._update_analysis_mode_ui()
         self.load_multiple_files()
         
     def _load_for_verification(self):
         """Direct verification loading - sets mode and loads multiple files."""
+        current_mode = self.analysis_mode_var.get()
+        
+        if current_mode != 'verification' and self.dataset_manager.has_datasets():
+            if not self._confirm_clear_datasets_if_needed():
+                return
+        
         self.analysis_mode_var.set('verification') 
         self._update_analysis_mode_ui()
         self.load_multiple_files()
