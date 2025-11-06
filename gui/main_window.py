@@ -1684,6 +1684,11 @@ For more detailed help, please refer to the user manual or contact support."""
             stats_str += f"  Min: {stats['size_min']:.3f}\n"
             stats_str += f"  Max: {stats['size_max']:.3f}\n"
             stats_str += f"  Mean: {stats['size_mean']:.3f}\n"
+
+        # Add notes section if they exist
+        if active_dataset['notes']:
+            stats_str += f"\n--- Notes ---\n"
+            stats_str += f"{active_dataset['notes']}"
         
         self.stats_panel.set_stats(stats_str)
     
