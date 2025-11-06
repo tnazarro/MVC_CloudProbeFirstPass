@@ -1055,7 +1055,7 @@ class MainWindow:
         """Show a dialog for editing dataset notes."""
         notes_window = tk.Toplevel(self.root)
         notes_window.title(f"Edit Notes - {dataset['tag']}")
-        notes_window.geometry("500x300")
+        notes_window.geometry("500x800")
         notes_window.grab_set()
         
         # Notes text area
