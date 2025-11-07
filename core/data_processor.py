@@ -334,6 +334,78 @@ class ParticleDataProcessor:
             logger.error(f"Error parsing {field_name} array: {e}")
             return None
 
+    def map_counts_to_sizes(self, counts: np.ndarray, calibration_data: dict = None) -> np.ndarray:
+        """
+        Map ADC threshold counts to particle sizes using calibration data.
+        
+        Uses inclusive upper bound: count <= threshold[i] maps to size[i].
+        
+        Example:
+            Thresholds: [91, 111, 159, ...]
+            Sizes:      [3,  4,   5,   ...]
+            Count 109:  > 91 and <= 111, maps to size 4 µm
+        
+        Args:
+            counts: Array of ADC threshold count values
+            calibration_data: Calibration dict (uses self.instrument_info['calibration'] if None)
+            
+        Returns:
+            Array of particle sizes (in µm) corresponding to input counts
+            
+        Raises:
+            ValueError: If no calibration data available
+        """
+        # Use provided calibration or fall back to instrument_info
+        if calibration_data is None:
+            calibration_data = self.instrument_info.get('calibration', {})
+        
+        # Validate calibration data exists
+        if not calibration_data.get('has_calibration', False):
+            raise ValueError("No calibration data available for count-to-size mapping")
+        
+        thresholds = np.array(calibration_data['thresholds'])
+        sizes = np.array(calibration_data['sizes'])
+        
+        # Validate input
+        if len(thresholds) != len(sizes):
+            raise ValueError(
+                f"Calibration data mismatch: {len(thresholds)} thresholds, {len(sizes)} sizes"
+            )
+        
+        # Convert counts to numpy array if needed
+        counts = np.asarray(counts)
+        
+        # Initialize output array with NaN (for invalid/out-of-range values)
+        mapped_sizes = np.full(counts.shape, np.nan)
+        
+        # Use numpy's searchsorted for efficient bin assignment
+        # searchsorted finds indices where counts would be inserted to maintain order
+        # Using 'right' side means count <= threshold[i]
+        bin_indices = np.searchsorted(thresholds, counts, side='right')
+        
+        # Handle edge cases:
+        # - bin_indices == 0: count is <= first threshold → assign to first bin
+        # - bin_indices > len(sizes): count is > last threshold → out of range (keep as NaN)
+        
+        # Clip indices to valid range [0, len(sizes)-1]
+        # Any count <= first threshold maps to first size (index 0)
+        # Any count > last threshold will be clipped to len(sizes), but we'll handle separately
+        valid_mask = bin_indices < len(sizes)
+        
+        # Assign sizes for valid bins
+        mapped_sizes[valid_mask] = sizes[bin_indices[valid_mask]]
+        
+        # Log warnings for out-of-range values
+        n_out_of_range = np.sum(~valid_mask)
+        if n_out_of_range > 0:
+            max_threshold = thresholds[-1]
+            logger.warning(
+                f"{n_out_of_range} count value(s) exceed maximum threshold "
+                f"({max_threshold}). These will be excluded from analysis."
+            )
+        
+        return mapped_sizes
+
     def get_instrument_type(self) -> str:
         """
         Get the detected or set instrument type.
