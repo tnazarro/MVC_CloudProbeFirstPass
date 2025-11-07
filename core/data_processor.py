@@ -41,7 +41,14 @@ class ParticleDataProcessor:
             'name': 'Unknown',
             'version': None,
             'pads_version': None,
-            'detection_method': None
+            'detection_method': None,
+            'calibration': {
+                'has_calibration': False,
+                'sizes': None,
+                'thresholds': None,
+                'bin_count': 0,
+                'order': None
+            }
         }
     
     def detect_instrument_type(self, file_path: str, max_lines: int = 60) -> dict:
@@ -152,6 +159,181 @@ class ParticleDataProcessor:
         self.instrument_info = result
         return result
 
+    def _parse_calibration_data(self, file_path: str, max_lines: int = 100) -> dict:
+        """
+        Parse calibration data (Sizes and Thresholds) from file header.
+        Auto-detects order since some instruments have reversed order.
+        
+        Args:
+            file_path: Path to the CSV file
+            max_lines: Maximum number of header lines to search
+            
+        Returns:
+            dict: Calibration information with keys:
+                - has_calibration: bool
+                - sizes: list of floats (particle sizes in µm)
+                - thresholds: list of ints (ADC threshold values)
+                - bin_count: int (number of bins)
+                - order: str ('sizes_first' or 'thresholds_first')
+        """
+        result = {
+            'has_calibration': False,
+            'sizes': None,
+            'thresholds': None,
+            'bin_count': 0,
+            'order': None
+        }
+        
+        sizes_line = None
+        thresholds_line = None
+        sizes_line_num = None
+        thresholds_line_num = None
+        
+        for encoding in SUPPORTED_CSV_ENCODINGS:
+            try:
+                with open(file_path, 'r', encoding=encoding) as f:
+                    for line_num, line in enumerate(f):
+                        if line_num >= max_lines:
+                            break
+                        
+                        line_clean = line.strip()
+                        line_lower = line_clean.lower()
+                        
+                        # Look for Sizes pattern: Sizes=<N>value1,value2,...
+                        if line_lower.startswith('sizes='):
+                            sizes_line = line_clean
+                            sizes_line_num = line_num
+                        
+                        # Look for Thresholds pattern: Thresholds=<N>value1,value2,...
+                        elif line_lower.startswith('thresholds='):
+                            thresholds_line = line_clean
+                            thresholds_line_num = line_num
+                        
+                        # Stop scanning after data separator
+                        if line_clean.startswith('****'):
+                            break
+                
+                # Process if both found
+                if sizes_line and thresholds_line:
+                    sizes_array = self._parse_calibration_array(sizes_line, 'Sizes')
+                    thresholds_array = self._parse_calibration_array(thresholds_line, 'Thresholds')
+                    
+                    if sizes_array and thresholds_array:
+                        # Validate arrays have same length
+                        if len(sizes_array) != len(thresholds_array):
+                            logger.warning(
+                                f"Calibration data length mismatch: "
+                                f"Sizes={len(sizes_array)}, Thresholds={len(thresholds_array)}"
+                            )
+                            return result
+                        
+                        # Determine order
+                        if sizes_line_num < thresholds_line_num:
+                            order = 'sizes_first'
+                        else:
+                            order = 'thresholds_first'
+                        
+                        result = {
+                            'has_calibration': True,
+                            'sizes': sizes_array,
+                            'thresholds': thresholds_array,
+                            'bin_count': len(sizes_array),
+                            'order': order
+                        }
+                        
+                        logger.info(
+                            f"Parsed calibration data: {len(sizes_array)} bins, "
+                            f"order={order}, size range={sizes_array[0]}-{sizes_array[-1]} µm"
+                        )
+                        
+                        return result
+                
+                # If we got here with this encoding, parsing is done (even if no calibration found)
+                return result
+                
+            except UnicodeDecodeError:
+                continue
+            except Exception as e:
+                logger.warning(f"Error parsing calibration data with encoding {encoding}: {e}")
+                continue
+        
+        logger.warning("Failed to parse calibration data with any supported encoding")
+        return result
+    
+    def _parse_calibration_array(self, line: str, field_name: str) -> Optional[List]:
+        """
+        Parse a calibration array line like: Sizes=<30>3,4,5,6,...
+        
+        Args:
+            line: The line containing the array
+            field_name: Name of field for logging (e.g., 'Sizes')
+            
+        Returns:
+            List of parsed values (floats for Sizes, ints for Thresholds) or None if parsing fails
+        """
+        try:
+            # Split on '=' to get the value part
+            parts = line.split('=', 1)
+            if len(parts) != 2:
+                return None
+            
+            value_part = parts[1].strip()
+            
+            # Extract count from <N> if present
+            if value_part.startswith('<'):
+                # Format: <30>3,4,5,6,...
+                bracket_end = value_part.find('>')
+                if bracket_end == -1:
+                    logger.warning(f"Invalid {field_name} format: missing '>'")
+                    return None
+                
+                count_str = value_part[1:bracket_end]
+                values_str = value_part[bracket_end + 1:]
+                
+                try:
+                    expected_count = int(count_str)
+                except ValueError:
+                    logger.warning(f"Invalid {field_name} count: {count_str}")
+                    return None
+            else:
+                # Format without <N>: just comma-separated values
+                values_str = value_part
+                expected_count = None
+            
+            # Parse comma-separated values
+            value_strings = values_str.split(',')
+            
+            # Determine if we're parsing floats (Sizes) or ints (Thresholds)
+            is_sizes = (field_name.lower() == 'sizes')
+            
+            parsed_values = []
+            for v_str in value_strings:
+                v_str = v_str.strip()
+                if not v_str:
+                    continue
+                
+                try:
+                    if is_sizes:
+                        parsed_values.append(float(v_str))
+                    else:
+                        parsed_values.append(int(v_str))
+                except ValueError:
+                    logger.warning(f"Invalid {field_name} value: {v_str}")
+                    return None
+            
+            # Validate count if specified
+            if expected_count is not None and len(parsed_values) != expected_count:
+                logger.warning(
+                    f"{field_name} count mismatch: expected {expected_count}, got {len(parsed_values)}"
+                )
+                return None
+            
+            return parsed_values
+            
+        except Exception as e:
+            logger.error(f"Error parsing {field_name} array: {e}")
+            return None
+
     def get_instrument_type(self) -> str:
         """
         Get the detected or set instrument type.
@@ -199,6 +381,12 @@ class ParticleDataProcessor:
         # First, detect instrument type
         detected_instrument = self.detect_instrument_type(file_path)
         
+        # Parse calibration data (Sizes/Thresholds)
+        calibration_data = self._parse_calibration_data(file_path)
+        
+        # Add calibration to instrument info
+        detected_instrument['calibration'] = calibration_data
+
         for encoding in SUPPORTED_CSV_ENCODINGS:
             try:
                 # Get total line count
