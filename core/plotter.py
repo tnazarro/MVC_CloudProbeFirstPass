@@ -492,36 +492,3 @@ class ParticlePlotter:
             return True
         
         return False
-    
-    def _calculate_bar_widths(self, bin_centers: np.ndarray) -> np.ndarray:
-        """
-        Calculate appropriate bar widths for native bin bar plots.
-        
-        Makes bars touch by using the distance to adjacent bins.
-        For edge bins, assumes same width as neighbor.
-        Bars are made slightly narrower (90% of spacing) to show separation.
-        
-        Args:
-            bin_centers: Array of bin center positions (particle sizes)
-            
-        Returns:
-            Array of bar widths, one per bin
-        """
-        if len(bin_centers) < 2:
-            # Single bin: use unit width
-            return np.array([1.0])
-        
-        widths = np.zeros(len(bin_centers))
-        
-        # For each bin, calculate width as distance to next bin
-        for i in range(len(bin_centers) - 1):
-            widths[i] = bin_centers[i + 1] - bin_centers[i]
-        
-        # Last bin uses same width as second-to-last
-        widths[-1] = widths[-2]
-        
-        # Make bars 90% of spacing so they don't quite touch
-        # This creates small visual gaps for clarity
-        widths *= 0.9
-        
-        return widths
