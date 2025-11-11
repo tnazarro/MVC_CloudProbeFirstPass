@@ -1741,13 +1741,16 @@ For more detailed help, please refer to the user manual or contact support."""
         # Create plot title with dataset info
         plot_title = f"Particle Size Distribution - {active_dataset['tag']}"
         
+        metadata = {'instrument_info': data_processor.instrument_info}
+
         # Create the plot
         figure = self.plotter.create_histogram(
             size_data, frequency_data, self.bin_count_var.get(),
             title=plot_title,
             show_stats_lines=self.show_stats_lines_var.get(),
             data_mode=mode,
-            show_gaussian_fit=self.show_gaussian_fit_var.get()
+            show_gaussian_fit=self.show_gaussian_fit_var.get(),
+            metadata=metadata
         )
         
         if figure is not None:
@@ -1778,12 +1781,15 @@ For more detailed help, please refer to the user manual or contact support."""
             mode = self.data_mode_var.get()
             plot_title = f"Particle Size Distribution - {active_dataset['tag']}"
             
+            metadata = {'instrument_info': data_processor.instrument_info}
+
             figure = self.plotter.create_histogram(
                 size_data, frequency_data, self.bin_count_var.get(),
                 title=plot_title,
                 show_stats_lines=self.show_stats_lines_var.get(),
                 data_mode=mode,
-                show_gaussian_fit=self.show_gaussian_fit_var.get()
+                show_gaussian_fit=self.show_gaussian_fit_var.get(),
+                metadata=metadata
             )
             
             if figure is not None:

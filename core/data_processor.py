@@ -352,11 +352,19 @@ class ParticleDataProcessor:
         
         # Pattern to match bin columns: anything ending with "Bin <number>"
         # Examples: "Bin 1", "CDP Bin 1", "Fog Monitor Bin 1"
+        # EXCLUDE: IPT bins (Inter-Particle Time) - these are timing data, not size bins
         bin_pattern = re.compile(r'^(.*)Bin\s+(\d+)$', re.IGNORECASE)
+        
+        # Also check for IPT pattern to exclude
+        ipt_pattern = re.compile(r'IPT', re.IGNORECASE)
         
         bin_columns = {}  # {bin_number: column_name}
         
         for col in column_names:
+            # Skip IPT (Inter-Particle Time) bins - these are timing data
+            if ipt_pattern.search(col):
+                continue
+            
             match = bin_pattern.match(col.strip())
             if match:
                 prefix = match.group(1).strip()
@@ -637,15 +645,32 @@ class ParticleDataProcessor:
 
         for encoding in SUPPORTED_CSV_ENCODINGS:
             try:
+                # Find the data start line (marked by ****)
+                data_start_line = 0
+                with open(file_path, 'r', encoding=encoding) as f:
+                    for line_num, line in enumerate(f):
+                        if line.strip().startswith('****'):
+                            data_start_line = line_num + 1  # Columns are on next line
+                            break
+                
                 # Get total line count
                 with open(file_path, 'r', encoding=encoding) as f:
                     total_lines = sum(1 for _ in f)
                 
-                # Try to parse a small sample to get column info
+                # Get column names by skipping to data start
                 try:
-                    sample_df = pd.read_csv(file_path, nrows=5, encoding=encoding)
+                    if data_start_line > 0:
+                        # Read from where actual data starts
+                        sample_df = pd.read_csv(file_path, skiprows=data_start_line, 
+                                               nrows=5, encoding=encoding)
+                    else:
+                        # No separator found, try reading normally
+                        sample_df = pd.read_csv(file_path, nrows=5, encoding=encoding)
+                    
                     sample_columns = sample_df.columns.tolist()
-                except Exception:
+                    logger.debug(f"Found {len(sample_columns)} columns starting at line {data_start_line}")
+                except Exception as e:
+                    logger.warning(f"Failed to parse sample columns: {e}")
                     sample_columns = []
                 
                 return {
