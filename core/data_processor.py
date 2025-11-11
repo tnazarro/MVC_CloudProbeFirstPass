@@ -43,7 +43,7 @@ class ParticleDataProcessor:
             'version': None,
             'pads_version': None,
             'detection_method': None,
-            'file_format': None,  # NEW: 'hk' or 'pbp'
+            'file_format': None,  #'hk' or 'pbp'
             'calibration': {
                 'has_calibration': False,
                 'sizes': None,

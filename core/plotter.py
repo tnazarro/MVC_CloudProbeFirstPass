@@ -42,7 +42,7 @@ class ParticlePlotter:
                         show_stats_lines: bool = True, data_mode: str = "pre_aggregated",
                         show_gaussian_fit: bool = True,
                         metadata: Optional[Dict[str, Any]] = None,
-                        use_native_bins: bool = False) -> matplotlib.figure.Figure:  # NEW
+                        use_native_bins: bool = False) -> matplotlib.figure.Figure:
         """
         Create a histogram plot of particle size data with optional Gaussian curve fitting.
         
