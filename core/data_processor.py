@@ -198,21 +198,21 @@ class ParticleDataProcessor:
                         if line_num >= max_lines:
                             break
                         
-                        line_clean = line.strip()
-                        line_lower = line_clean.lower()
+                        line = line.strip()
+                        line_lower = line.lower()
                         
                         # Look for Sizes pattern: Sizes=<N>value1,value2,...
                         if line_lower.startswith('sizes='):
-                            sizes_line = line_clean
+                            sizes_line = line
                             sizes_line_num = line_num
                         
                         # Look for Thresholds pattern: Thresholds=<N>value1,value2,...
                         elif line_lower.startswith('thresholds='):
-                            thresholds_line = line_clean
+                            thresholds_line = line
                             thresholds_line_num = line_num
                         
                         # Stop scanning after data separator
-                        if line_clean.startswith('****'):
+                        if line.startswith('****'):
                             break
                 
                 # Process if both found
@@ -266,17 +266,25 @@ class ParticleDataProcessor:
         """
         Parse a calibration array line like: Sizes=<30>3,4,5,6,...
         
+        Accepts two formats:
+        - With count: Sizes=<30>3,4,5,6,...
+        - Without count: Sizes=3,4,5,6,...
+        
         Args:
-            line: The line containing the array
-            field_name: Name of field for logging (e.g., 'Sizes')
+            line: The line to parse
+            field_name: Either 'Sizes' or 'Thresholds'
             
         Returns:
-            List of parsed values (floats for Sizes, ints for Thresholds) or None if parsing fails
+            List of float values (for Sizes) or int values (for Thresholds), or None if parsing fails
         """
         try:
             # Split on '=' to get the value part
             parts = line.split('=', 1)
             if len(parts) != 2:
+                logger.warning(
+                    f"Failed to parse {field_name}: line does not contain '=' separator. "
+                    f"Expected format: '{field_name}=<N>value1,value2,...' or '{field_name}=value1,value2,...'"
+                )
                 return None
             
             value_part = parts[1].strip()
@@ -341,7 +349,8 @@ class ParticleDataProcessor:
         Detect bin columns in HK (pre-aggregated) files.
         
         Looks for patterns like: "Bin 1", "CDP Bin 1", "Fog Monitor Bin 1", etc.
-        
+        Excludes IPT (Inter-Particle Time) bins as these contain timing data, not particle size data.
+
         Args:
             column_names: List of column names from CSV
             expected_bin_count: Expected number of bins from calibration
@@ -352,6 +361,7 @@ class ParticleDataProcessor:
         
         # Pattern to match bin columns: anything ending with "Bin <number>"
         # Examples: "Bin 1", "CDP Bin 1", "Fog Monitor Bin 1"
+        # Capture groups: group(1) = prefix (e.g., "CDP ", "Fog Monitor "), group(2) = bin number
         # EXCLUDE: IPT bins (Inter-Particle Time) - these are timing data, not size bins
         bin_pattern = re.compile(r'^(.*)Bin\s+(\d+)$', re.IGNORECASE)
         
@@ -478,19 +488,19 @@ class ParticleDataProcessor:
             
             # Load the full dataset
             encoding = metadata['encoding']
-            df = pd.read_csv(file_path, skiprows=skip_rows, encoding=encoding)
+            hk_data = pd.read_csv(file_path, skiprows=skip_rows, encoding=encoding)
             
-            logger.info(f"Loaded HK file with {len(df)} rows (time periods)")
+            logger.info(f"Loaded HK file with {len(hk_data)} rows (time periods)")
             
             # Extract bin data and sum across all rows
             bin_counts = []
             for bin_col in bin_columns:
-                if bin_col not in df.columns:
+                if bin_col not in hk_data.columns:
                     logger.error(f"Bin column '{bin_col}' not found in dataframe")
                     return False
                 
                 # Sum all values in this bin column
-                total_count = df[bin_col].sum()
+                total_count = hk_data[bin_col].sum()
                 bin_counts.append(total_count)
             
             # Convert to numpy arrays
@@ -530,11 +540,11 @@ class ParticleDataProcessor:
             Count 109:  > 91 and <= 111, maps to size 4 µm
         
         Args:
-            counts: Array of ADC threshold count values
+            counts: Array-like of ADC count values
             calibration_data: Calibration dict (uses self.instrument_info['calibration'] if None)
             
         Returns:
-            Array of particle sizes (in µm) corresponding to input counts
+            np.ndarray: Array of particle sizes (in µm) corresponding to input counts
             
         Raises:
             ValueError: If no calibration data available
@@ -567,10 +577,10 @@ class ParticleDataProcessor:
         # Using 'right' side means count <= threshold[i]
         bin_indices = np.searchsorted(thresholds, counts, side='right')
         
-        # Handle edge cases:
-        # - bin_indices == 0: count is <= first threshold → assign to first bin
-        # - bin_indices > len(sizes): count is > last threshold → out of range (keep as NaN)
-        
+        # Handle edge case:
+        # - bin_indices >= len(sizes): count exceeds max threshold → out of range (assign NaN)
+        # Note: bin_indices == 0 is NOT an edge case - it's a valid assignment to the first bin
+
         # Clip indices to valid range [0, len(sizes)-1]
         # Any count <= first threshold maps to first size (index 0)
         # Any count > last threshold will be clipped to len(sizes), but we'll handle separately
