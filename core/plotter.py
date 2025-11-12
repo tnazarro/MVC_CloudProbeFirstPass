@@ -41,7 +41,8 @@ class ParticlePlotter:
                         bin_count: int = DEFAULT_BIN_COUNT, title: str = "Particle Size Distribution", 
                         show_stats_lines: bool = True, data_mode: str = "pre_aggregated",
                         show_gaussian_fit: bool = True,
-                        metadata: Optional[Dict[str, Any]] = None) -> matplotlib.figure.Figure:
+                        metadata: Optional[Dict[str, Any]] = None,
+                        use_native_bins: bool = False) -> matplotlib.figure.Figure:
         """
         Create a histogram plot of particle size data with optional Gaussian curve fitting.
         
@@ -53,6 +54,8 @@ class ParticlePlotter:
             show_stats_lines: Whether to show mean and std deviation lines
             data_mode: "pre_aggregated" or "raw_measurements"
             show_gaussian_fit: Whether to show Gaussian curve fit
+            use_native_bins: If True, use bar plot with data as-is (for instrument native bins).
+                        If False, use traditional histogram with bin_count.
             
         Returns:
             matplotlib Figure object
@@ -67,8 +70,43 @@ class ParticlePlotter:
             self.figure = plt.figure(figsize=(PLOT_WIDTH, PLOT_HEIGHT), dpi=PLOT_DPI)
             self.ax = self.figure.add_subplot(111)
             
-            # Create histogram based on data mode
-            if data_mode == "raw_measurements":
+            # Auto-detect if we should use native instrument bins
+            use_native_bins = self._should_use_native_bins(metadata, data_mode)
+            
+            # Create visualization based on detection
+            if use_native_bins and frequency_data is not None:
+                # Native bins mode: Use bar plot with instrument's pre-defined bins
+                # This is for HK (verification mode) files with calibration data
+                
+                logger.info(f"Using native instrument bins: {len(size_data)} bins")
+                
+                # Calculate bar widths based on spacing between bin centers
+                bar_widths = self._calculate_bar_widths(size_data)
+                
+                # Create bar plot at exact bin positions
+                bars = self.ax.bar(size_data, frequency_data, width=bar_widths,
+                                  alpha=0.7, edgecolor='black', linewidth=0.5,
+                                  label='Data')
+                self.ax.set_ylabel('Count')
+                
+                # For Gaussian fitting and stats, use data as-is
+                bin_centers = size_data
+                bin_counts = frequency_data
+                
+                # Create pseudo-bins for mode calculation
+                # Calculate edges halfway between centers
+                if len(size_data) > 1:
+                    edges = [(size_data[i] + size_data[i+1])/2 for i in range(len(size_data)-1)]
+                    # Add left and right boundaries
+                    left_edge = size_data[0] - (edges[0] - size_data[0])
+                    right_edge = size_data[-1] + (size_data[-1] - edges[-1])
+                    bins = np.array([left_edge] + edges + [right_edge])
+                else:
+                    bins = np.array([size_data[0]-0.5, size_data[0]+0.5])
+                
+                n = frequency_data
+                
+            elif data_mode == "raw_measurements":
                 # Raw measurements: create histogram from individual data points
                 n, bins, patches = self.ax.hist(size_data, bins=bin_count, alpha=0.7, 
                                                edgecolor='black', linewidth=0.5, 
@@ -88,7 +126,7 @@ class ParticlePlotter:
                 self.ax.set_ylabel('Frequency')
                 logger.info(f"Created pre-aggregated histogram with {len(size_data)} bins and frequency weights")
                 
-                # For Gaussian fitting, use the original binned data
+                # For Gaussian fitting AND mode calc, use the original binned data
                 bin_centers = size_data
                 bin_counts = frequency_data
                 
@@ -104,11 +142,21 @@ class ParticlePlotter:
                 bin_centers = (bins[:-1] + bins[1:]) / 2
                 bin_counts = n
             
-            # Calculate mode (bin with highest count) 
-            mode_index = np.argmax(n)
+            # Calculate mode (bin with highest count)
+            mode_index = np.argmax(bin_counts)
             mode_bin_center = bin_centers[mode_index]
-            mode_bin_left = bins[mode_index]
-            mode_bin_right = bins[mode_index + 1]
+            
+            # For mode bin edges, calculate from bin_centers
+            # (works for both native bins and regular histograms)
+            if mode_index > 0:
+                mode_bin_left = (bin_centers[mode_index-1] + bin_centers[mode_index]) / 2
+            else:
+                mode_bin_left = bin_centers[0] - (bin_centers[1] - bin_centers[0]) / 2
+            
+            if mode_index < len(bin_centers) - 1:
+                mode_bin_right = (bin_centers[mode_index] + bin_centers[mode_index+1]) / 2
+            else:
+                mode_bin_right = bin_centers[-1] + (bin_centers[-1] - bin_centers[-2]) / 2
             mode_info = {
                 'center': mode_bin_center,
                 'left': mode_bin_left,
@@ -186,6 +234,36 @@ class ParticlePlotter:
             logger.error(f"Error creating histogram: {e}")
             return None
     
+    def _calculate_bar_widths(self, bin_centers: np.ndarray) -> np.ndarray:
+        """
+        Calculate appropriate bar widths for native bin plotting.
+        
+        Makes bars touch by using the distance to adjacent bins.
+        For edge bins, assumes same width as neighbor.
+        
+        Args:
+            bin_centers: Array of bin center positions
+            
+        Returns:
+            Array of bar widths
+        """
+        if len(bin_centers) < 2:
+            return np.array([1.0])  # Default width if only one bin
+        
+        widths = np.zeros(len(bin_centers))
+        
+        # For each bin, width is distance to next bin
+        for i in range(len(bin_centers) - 1):
+            widths[i] = bin_centers[i + 1] - bin_centers[i]
+        
+        # Last bin uses same width as second-to-last
+        widths[-1] = widths[-2]
+        
+        # Make bars slightly narrower so they don't quite touch (90% of spacing)
+        widths *= 0.9
+        
+        return widths
+
     def _add_gaussian_curve(self, fit_result: Dict[str, Any]) -> None:
         """Add the fitted Gaussian curve to the plot."""
         if not fit_result['success']:
@@ -378,3 +456,39 @@ class ParticlePlotter:
         return self.create_histogram(size_data, frequency_data, new_bin_count, 
                                    show_stats_lines=show_stats_lines)
     
+    def _should_use_native_bins(self, metadata: Optional[Dict[str, Any]], 
+                               data_mode: str) -> bool:
+        """
+        Determine if we should use native instrument bins (bar plot)
+        or arbitrary bins (histogram).
+        
+        Auto-detects based on:
+        - File format is 'hk' (housekeeping/verification mode)
+        - Calibration data exists
+        - Data mode is pre-aggregated
+        
+        Args:
+            metadata: Metadata dict containing instrument_info
+            data_mode: Current data mode
+            
+        Returns:
+            bool: True if should use native bins (bar plot)
+        """
+        # Must be pre-aggregated data
+        if data_mode != "pre_aggregated":
+            return False
+        
+        # Must have metadata
+        if not metadata:
+            return False
+        
+        # Check for HK format with calibration
+        instrument_info = metadata.get('instrument_info', {})
+        file_format = instrument_info.get('file_format')
+        has_calibration = instrument_info.get('calibration', {}).get('has_calibration', False)
+        
+        if file_format == 'hk' and has_calibration:
+            logger.info("Auto-detected: Using native instrument bins for HK file")
+            return True
+        
+        return False

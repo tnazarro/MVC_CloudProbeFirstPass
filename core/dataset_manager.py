@@ -105,7 +105,7 @@ class DatasetManager:
                 'skip_rows': skip_rows,
                 'instrument_type': instrument_type,
                 'analysis_settings': {
-                    'data_mode': 'raw_measurements',
+                    'data_mode': data_processor.data_mode,
                     'bin_count': bin_count,
                     'size_column': size_column,
                     'frequency_column': data_processor.frequency_column,
