@@ -277,7 +277,8 @@ class ParticleDataProcessor:
         Accepts two formats:
         - With count: Sizes=<30>3,4,5,6,...
         - Without count: Sizes=3,4,5,6,...
-        
+        *Generally, the total number of bins is included with the sizes.
+
         Args:
             line: The line to parse
             field_name: Either 'Sizes' or 'Thresholds'
