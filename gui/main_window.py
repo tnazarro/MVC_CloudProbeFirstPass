@@ -362,12 +362,24 @@ class MainWindow:
 
     def _load_for_calibration(self):
         """Direct calibration loading - sets mode and loads single file."""
+        current_mode = self.analysis_mode_var.get()
+        
+        if current_mode != 'calibration' and self.dataset_manager.has_datasets():
+            if not self._confirm_clear_datasets_if_needed():
+                return
+        
         self.analysis_mode_var.set('calibration')
         self._update_analysis_mode_ui()
         self.load_multiple_files()
         
     def _load_for_verification(self):
         """Direct verification loading - sets mode and loads multiple files."""
+        current_mode = self.analysis_mode_var.get()
+        
+        if current_mode != 'verification' and self.dataset_manager.has_datasets():
+            if not self._confirm_clear_datasets_if_needed():
+                return
+        
         self.analysis_mode_var.set('verification') 
         self._update_analysis_mode_ui()
         self.load_multiple_files()
@@ -1043,7 +1055,7 @@ class MainWindow:
         """Show a dialog for editing dataset notes."""
         notes_window = tk.Toplevel(self.root)
         notes_window.title(f"Edit Notes - {dataset['tag']}")
-        notes_window.geometry("500x300")
+        notes_window.geometry("500x800")
         notes_window.grab_set()
         
         # Notes text area
@@ -1672,6 +1684,11 @@ For more detailed help, please refer to the user manual or contact support."""
             stats_str += f"  Min: {stats['size_min']:.3f}\n"
             stats_str += f"  Max: {stats['size_max']:.3f}\n"
             stats_str += f"  Mean: {stats['size_mean']:.3f}\n"
+
+        # Add notes section if they exist
+        if active_dataset['notes']:
+            stats_str += f"\n--- Notes ---\n"
+            stats_str += f"{active_dataset['notes']}"
         
         self.stats_panel.set_stats(stats_str)
     
