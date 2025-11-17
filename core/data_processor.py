@@ -251,6 +251,14 @@ class ParticleDataProcessor:
                         return result
                 
                 # If we got here with this encoding, parsing is done (even if no calibration found)
+                # Log if we found partial calibration data
+                if sizes_line and not thresholds_line:
+                    logger.warning("Found Sizes but no Thresholds in calibration data - cannot use incomplete calibration")
+                elif thresholds_line and not sizes_line:
+                    logger.warning("Found Thresholds but no Sizes in calibration data - cannot use incomplete calibration")
+                elif sizes_line and thresholds_line and not (sizes_array and thresholds_array):
+                    logger.warning("Found calibration lines but failed to parse them")
+                
                 return result
                 
             except UnicodeDecodeError:
@@ -377,13 +385,17 @@ class ParticleDataProcessor:
             
             match = bin_pattern.match(col.strip())
             if match:
-                prefix = match.group(1).strip()
                 bin_num = int(match.group(2))
                 bin_columns[bin_num] = col
         
         # Validate we found bins
         if not bin_columns:
             logger.debug("No bin columns detected")
+            return None
+        
+        # Validate we have expected bin count from calibration
+        if expected_bin_count == 0:
+            logger.error("Cannot validate bin columns: no calibration data available (expected_bin_count = 0)")
             return None
         
         # Check if we have the expected number of bins
@@ -430,7 +442,7 @@ class ParticleDataProcessor:
         Returns:
             'hk' or 'pbp'
         """
-        columns = metadata.get('sample_columns', [])
+        columns = metadata.get('column_names', [])
         calibration = self.instrument_info.get('calibration', {})
         
         # Only attempt detection if we have calibration data
@@ -478,7 +490,7 @@ class ParticleDataProcessor:
             
             # Detect bin columns
             bin_columns = self._detect_bin_columns(
-                metadata['sample_columns'], 
+                metadata['column_names'], 
                 calibration['bin_count']
             )
             
@@ -538,13 +550,15 @@ class ParticleDataProcessor:
             Thresholds: [91, 111, 159, ...]
             Sizes:      [3,  4,   5,   ...]
             Count 109:  > 91 and <= 111, maps to size 4 µm
+            Count 5000: > max threshold (out of range), returns NaN
         
         Args:
             counts: Array-like of ADC count values
             calibration_data: Calibration dict (uses self.instrument_info['calibration'] if None)
             
         Returns:
-            np.ndarray: Array of particle sizes (in µm) corresponding to input counts
+            np.ndarray: Array of particle sizes (in µm) corresponding to input counts.
+                       Counts exceeding the maximum threshold return NaN.
             
         Raises:
             ValueError: If no calibration data available
@@ -642,7 +656,7 @@ class ParticleDataProcessor:
                 - encoding: str (if successful)
                 - error: str (if failed)
                 - total_lines: int (if successful)
-                - sample_columns: list (if successful)
+                - column_names: list (if successful)
         """
         # First, detect instrument type
         detected_instrument = self.detect_instrument_type(file_path)
@@ -677,17 +691,17 @@ class ParticleDataProcessor:
                         # No separator found, try reading normally
                         sample_df = pd.read_csv(file_path, nrows=5, encoding=encoding)
                     
-                    sample_columns = sample_df.columns.tolist()
-                    logger.debug(f"Found {len(sample_columns)} columns starting at line {data_start_line}")
+                    column_names = sample_df.columns.tolist()
+                    logger.debug(f"Found {len(column_names)} columns starting at line {data_start_line}")
                 except Exception as e:
                     logger.warning(f"Failed to parse sample columns: {e}")
-                    sample_columns = []
+                    column_names = []
                 
                 return {
                     'success': True,
                     'encoding': encoding,
                     'total_lines': total_lines,
-                    'sample_columns': sample_columns,
+                    'column_names': column_names,
                     'instrument_info': detected_instrument
                 }
                 
@@ -921,8 +935,8 @@ class ParticleDataProcessor:
                 'success': True,
                 'preview_lines': preview_lines,
                 'total_lines': metadata['total_lines'],
-                'detected_columns': len(metadata['sample_columns']),
-                'column_names': metadata['sample_columns'],
+                'detected_columns': len(metadata['column_names']),
+                'column_names': metadata['column_names'],
                 'encoding_used': encoding,
                 'instrument_type': metadata['instrument_info']['name']
             }
