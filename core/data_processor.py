@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 import logging
 import os
+import re
 from typing import Tuple, List, Optional, Dict, Any
 from config.constants import SIZE_COLUMN_NAMES, FREQUENCY_COLUMN_NAMES, RANDOM_DATA_BOUNDS, SUPPORTED_CSV_ENCODINGS
 
@@ -41,7 +42,15 @@ class ParticleDataProcessor:
             'name': 'Unknown',
             'version': None,
             'pads_version': None,
-            'detection_method': None
+            'detection_method': None,
+            'file_format': None,  #'hk' or 'pbp'
+            'calibration': {
+                'has_calibration': False,
+                'sizes': None,
+                'thresholds': None,
+                'bin_count': 0,
+                'order': None
+            }
         }
     
     def detect_instrument_type(self, file_path: str, max_lines: int = 60) -> dict:
@@ -152,6 +161,460 @@ class ParticleDataProcessor:
         self.instrument_info = result
         return result
 
+    def _parse_calibration_data(self, file_path: str, max_lines: int = 100) -> dict:
+        """
+        Parse calibration data (Sizes and Thresholds) from file header.
+        Auto-detects order since some instruments have reversed order.
+        
+        Args:
+            file_path: Path to the CSV file
+            max_lines: Maximum number of header lines to search
+            
+        Returns:
+            dict: Calibration information with keys:
+                - has_calibration: bool
+                - sizes: list of floats (particle sizes in µm)
+                - thresholds: list of ints (ADC threshold values)
+                - bin_count: int (number of bins)
+                - order: str ('sizes_first' or 'thresholds_first')
+        """
+        result = {
+            'has_calibration': False,
+            'sizes': None,
+            'thresholds': None,
+            'bin_count': 0,
+            'order': None
+        }
+        
+        sizes_line = None
+        thresholds_line = None
+        sizes_line_num = None
+        thresholds_line_num = None
+        
+        for encoding in SUPPORTED_CSV_ENCODINGS:
+            try:
+                with open(file_path, 'r', encoding=encoding) as f:
+                    for line_num, line in enumerate(f):
+                        if line_num >= max_lines:
+                            break
+                        
+                        line = line.strip()
+                        line_lower = line.lower()
+                        
+                        # Look for Sizes pattern: Sizes=<N>value1,value2,...
+                        if line_lower.startswith('sizes='):
+                            sizes_line = line
+                            sizes_line_num = line_num
+                        
+                        # Look for Thresholds pattern: Thresholds=<N>value1,value2,...
+                        elif line_lower.startswith('thresholds='):
+                            thresholds_line = line
+                            thresholds_line_num = line_num
+                        
+                        # Stop scanning after data separator
+                        if line.startswith('****'):
+                            break
+                
+                # Process if both found
+                if sizes_line and thresholds_line:
+                    sizes_array = self._parse_calibration_array(sizes_line, 'Sizes')
+                    thresholds_array = self._parse_calibration_array(thresholds_line, 'Thresholds')
+                    
+                    if sizes_array and thresholds_array:
+                        # Validate arrays have same length
+                        if len(sizes_array) != len(thresholds_array):
+                            logger.warning(
+                                f"Calibration data length mismatch: "
+                                f"Sizes={len(sizes_array)}, Thresholds={len(thresholds_array)}"
+                            )
+                            return result
+                        
+                        # Determine order
+                        if sizes_line_num < thresholds_line_num:
+                            order = 'sizes_first'
+                        else:
+                            order = 'thresholds_first'
+                        
+                        result = {
+                            'has_calibration': True,
+                            'sizes': sizes_array,
+                            'thresholds': thresholds_array,
+                            'bin_count': len(sizes_array),
+                            'order': order
+                        }
+                        
+                        logger.info(
+                            f"Parsed calibration data: {len(sizes_array)} bins, "
+                            f"order={order}, size range={sizes_array[0]}-{sizes_array[-1]} µm"
+                        )
+                        
+                        return result
+                
+                # If we got here with this encoding, parsing is done (even if no calibration found)
+                # Log if we found partial calibration data
+                if sizes_line and not thresholds_line:
+                    logger.warning("Found Sizes but no Thresholds in calibration data - cannot use incomplete calibration")
+                elif thresholds_line and not sizes_line:
+                    logger.warning("Found Thresholds but no Sizes in calibration data - cannot use incomplete calibration")
+                elif sizes_line and thresholds_line and not (sizes_array and thresholds_array):
+                    logger.warning("Found calibration lines but failed to parse them")
+                
+                return result
+                
+            except UnicodeDecodeError:
+                continue
+            except Exception as e:
+                logger.warning(f"Error parsing calibration data with encoding {encoding}: {e}")
+                continue
+        
+        logger.warning("Failed to parse calibration data with any supported encoding")
+        return result
+    
+    def _parse_calibration_array(self, line: str, field_name: str) -> Optional[List]:
+        """
+        Parse a calibration array line like: Sizes=<30>3,4,5,6,...
+        
+        Accepts two formats:
+        - With count: Sizes=<30>3,4,5,6,...
+        - Without count: Sizes=3,4,5,6,...
+        *Generally, the total number of bins is included with the sizes.
+
+        Args:
+            line: The line to parse
+            field_name: Either 'Sizes' or 'Thresholds'
+            
+        Returns:
+            List of float values (for Sizes) or int values (for Thresholds), or None if parsing fails
+        """
+        try:
+            # Split on '=' to get the value part
+            parts = line.split('=', 1)
+            if len(parts) != 2:
+                logger.warning(
+                    f"Failed to parse {field_name}: line does not contain '=' separator. "
+                    f"Expected format: '{field_name}=<N>value1,value2,...' or '{field_name}=value1,value2,...'"
+                )
+                return None
+            
+            value_part = parts[1].strip()
+            
+            # Extract count from <N> if present
+            if value_part.startswith('<'):
+                # Format: <30>3,4,5,6,...
+                bracket_end = value_part.find('>')
+                if bracket_end == -1:
+                    logger.warning(f"Invalid {field_name} format: missing '>'")
+                    return None
+                
+                count_str = value_part[1:bracket_end]
+                values_str = value_part[bracket_end + 1:]
+                
+                try:
+                    expected_count = int(count_str)
+                except ValueError:
+                    logger.warning(f"Invalid {field_name} count: {count_str}")
+                    return None
+            else:
+                # Format without <N>: just comma-separated values
+                values_str = value_part
+                expected_count = None
+            
+            # Parse comma-separated values
+            value_strings = values_str.split(',')
+            
+            # Determine if we're parsing floats (Sizes) or ints (Thresholds)
+            is_sizes = (field_name.lower() == 'sizes')
+            
+            parsed_values = []
+            for v_str in value_strings:
+                v_str = v_str.strip()
+                if not v_str:
+                    continue
+                
+                try:
+                    if is_sizes:
+                        parsed_values.append(float(v_str))
+                    else:
+                        parsed_values.append(int(v_str))
+                except ValueError:
+                    logger.warning(f"Invalid {field_name} value: {v_str}")
+                    return None
+            
+            # Validate count if specified
+            if expected_count is not None and len(parsed_values) != expected_count:
+                logger.warning(
+                    f"{field_name} count mismatch: expected {expected_count}, got {len(parsed_values)}"
+                )
+                return None
+            
+            return parsed_values
+            
+        except Exception as e:
+            logger.error(f"Error parsing {field_name} array: {e}")
+            return None
+
+    def _detect_bin_columns(self, column_names: List[str], expected_bin_count: int) -> Optional[List[str]]:
+        """
+        Detect bin columns in HK (pre-aggregated) files.
+        
+        Looks for patterns like: "Bin 1", "CDP Bin 1", "Fog Monitor Bin 1", etc.
+        Excludes IPT (Inter-Particle Time) bins as these contain timing data, not particle size data.
+
+        Args:
+            column_names: List of column names from CSV
+            expected_bin_count: Expected number of bins from calibration
+            
+        Returns:
+            Ordered list of bin column names, or None if detection fails
+        """
+        
+        # Pattern to match bin columns: anything ending with "Bin <number>"
+        # Examples: "Bin 1", "CDP Bin 1", "Fog Monitor Bin 1"
+        # Capture groups: group(1) = prefix (e.g., "CDP ", "Fog Monitor "), group(2) = bin number
+        # EXCLUDE: IPT bins (Inter-Particle Time) - these are timing data, not size bins
+        bin_pattern = re.compile(r'^(.*)Bin\s+(\d+)$', re.IGNORECASE)
+        
+        # Also check for IPT pattern to exclude
+        ipt_pattern = re.compile(r'IPT', re.IGNORECASE)
+        
+        bin_columns = {}  # {bin_number: column_name}
+        
+        for col in column_names:
+            # Skip IPT (Inter-Particle Time) bins - these are timing data
+            if ipt_pattern.search(col):
+                continue
+            
+            match = bin_pattern.match(col.strip())
+            if match:
+                bin_num = int(match.group(2))
+                bin_columns[bin_num] = col
+        
+        # Validate we found bins
+        if not bin_columns:
+            logger.debug("No bin columns detected")
+            return None
+        
+        # Validate we have expected bin count from calibration
+        if expected_bin_count == 0:
+            logger.error("Cannot validate bin columns: no calibration data available (expected_bin_count = 0)")
+            return None
+        
+        # Check if we have the expected number of bins
+        if len(bin_columns) != expected_bin_count:
+            logger.warning(
+                f"Bin count mismatch: found {len(bin_columns)} bin columns, "
+                f"expected {expected_bin_count} from calibration"
+            )
+            return None
+        
+        # Validate bins are sequential (1, 2, 3, ... N)
+        bin_numbers = sorted(bin_columns.keys())
+        expected_sequence = list(range(1, expected_bin_count + 1))
+        
+        if bin_numbers != expected_sequence:
+            logger.error(
+                f"Bin columns are not sequential. Found: {bin_numbers}, "
+                f"Expected: {expected_sequence}"
+            )
+            return None
+        
+        # Return columns in order
+        ordered_columns = [bin_columns[i] for i in expected_sequence]
+        
+        logger.info(
+            f"Detected {len(ordered_columns)} bin columns: "
+            f"{ordered_columns[0]} ... {ordered_columns[-1]}"
+        )
+        
+        return ordered_columns
+
+    def _detect_file_format(self, metadata: Dict[str, Any]) -> str:
+        """
+        Detect if file is HK (pre-aggregated) or PBP (particle-by-particle).
+        
+        Detection strategy:
+        1. Check for bin columns matching calibration bin_count → HK
+        2. Check for "Size [counts]" or similar column → PBP
+        3. Default to PBP if ambiguous
+        
+        Args:
+            metadata: Metadata dict from _parse_csv_metadata
+            
+        Returns:
+            'hk' or 'pbp'
+        """
+        columns = metadata.get('column_names', [])
+        calibration = self.instrument_info.get('calibration', {})
+        
+        # Only attempt detection if we have calibration data
+        if not calibration.get('has_calibration', False):
+            logger.info("No calibration data, defaulting to PBP format")
+            return 'pbp'
+        
+        bin_count = calibration['bin_count']
+        
+        # Strategy 1: Look for bin columns
+        bin_columns = self._detect_bin_columns(columns, bin_count)
+        if bin_columns and len(bin_columns) == bin_count:
+            logger.info(f"Detected HK format: found {bin_count} bin columns")
+            return 'hk'
+        
+        # Strategy 2: Look for PBP size column
+        for col in columns:
+            col_lower = col.lower()
+            # Look for patterns like "Size [counts]", "Size(counts)", etc.
+            if 'size' in col_lower and ('count' in col_lower or '[' in col_lower):
+                logger.info(f"Detected PBP format: found size column '{col}'")
+                return 'pbp'
+        
+        # Default to PBP
+        logger.warning("Could not definitively detect file format, defaulting to PBP")
+        return 'pbp'
+
+    def _load_hk_data(self, file_path: str, metadata: Dict[str, Any], skip_rows: int = 0) -> bool:
+        """
+        Load pre-aggregated HK (housekeeping) file data.
+        
+        HK files have bin columns with counts already aggregated by the instrument.
+        We extract the calibration sizes and sum bin counts across all time periods.
+        
+        Args:
+            file_path: Path to CSV file
+            metadata: Metadata from _parse_csv_metadata
+            skip_rows: Number of rows to skip
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            calibration = self.instrument_info['calibration']
+            
+            # Detect bin columns
+            bin_columns = self._detect_bin_columns(
+                metadata['column_names'], 
+                calibration['bin_count']
+            )
+            
+            if not bin_columns:
+                logger.error("Failed to detect bin columns in HK file")
+                return False
+            
+            # Load the full dataset
+            encoding = metadata['encoding']
+            hk_data = pd.read_csv(file_path, skiprows=skip_rows, encoding=encoding)
+            
+            logger.info(f"Loaded HK file with {len(hk_data)} rows (time periods)")
+            
+            # Extract bin data and sum across all rows
+            bin_counts = []
+            for bin_col in bin_columns:
+                if bin_col not in hk_data.columns:
+                    logger.error(f"Bin column '{bin_col}' not found in dataframe")
+                    return False
+                
+                # Sum all values in this bin column
+                total_count = hk_data[bin_col].sum()
+                bin_counts.append(total_count)
+            
+            # Convert to numpy arrays
+            sizes = np.array(calibration['sizes'])
+            counts = np.array(bin_counts)
+            
+            logger.info(
+                f"Aggregated HK data: {len(sizes)} bins, "
+                f"total particles: {counts.sum():.0f}"
+            )
+            
+            # Store as pre-aggregated data
+            self.data = pd.DataFrame({
+                'size': sizes,
+                'frequency': counts
+            })
+            
+            self.size_column = 'size'
+            self.frequency_column = 'frequency'
+            self.data_mode = 'pre_aggregated'
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error loading HK data: {e}")
+            return False
+
+    def map_counts_to_sizes(self, counts: np.ndarray, calibration_data: dict = None) -> np.ndarray:
+        """
+        Map ADC threshold counts to particle sizes using calibration data.
+        
+        Uses inclusive upper bound: count <= threshold[i] maps to size[i].
+        
+        Example:
+            Thresholds: [91, 111, 159, ...]
+            Sizes:      [3,  4,   5,   ...]
+            Count 109:  > 91 and <= 111, maps to size 4 µm
+            Count 5000: > max threshold (out of range), returns NaN
+        
+        Args:
+            counts: Array-like of ADC count values
+            calibration_data: Calibration dict (uses self.instrument_info['calibration'] if None)
+            
+        Returns:
+            np.ndarray: Array of particle sizes (in µm) corresponding to input counts.
+                       Counts exceeding the maximum threshold return NaN.
+            
+        Raises:
+            ValueError: If no calibration data available
+        """
+        # Use provided calibration or fall back to instrument_info
+        if calibration_data is None:
+            calibration_data = self.instrument_info.get('calibration', {})
+        
+        # Validate calibration data exists
+        if not calibration_data.get('has_calibration', False):
+            raise ValueError("No calibration data available for count-to-size mapping")
+        
+        thresholds = np.array(calibration_data['thresholds'])
+        sizes = np.array(calibration_data['sizes'])
+        
+        # Validate input
+        if len(thresholds) != len(sizes):
+            raise ValueError(
+                f"Calibration data mismatch: {len(thresholds)} thresholds, {len(sizes)} sizes"
+            )
+        
+        # Convert counts to numpy array if needed
+        counts = np.asarray(counts)
+        
+        # Initialize output array with NaN (for invalid/out-of-range values)
+        mapped_sizes = np.full(counts.shape, np.nan)
+        
+        # Use numpy's searchsorted for efficient bin assignment
+        # searchsorted finds indices where counts would be inserted to maintain order
+        # Using 'right' side means count <= threshold[i]
+        bin_indices = np.searchsorted(thresholds, counts, side='right')
+        
+        # Handle edge case:
+        # - bin_indices >= len(sizes): count exceeds max threshold → out of range (assign NaN)
+        # Note: bin_indices == 0 is NOT an edge case - it's a valid assignment to the first bin
+
+        # Clip indices to valid range [0, len(sizes)-1]
+        # Any count <= first threshold maps to first size (index 0)
+        # Any count > last threshold will be clipped to len(sizes), but we'll handle separately
+        valid_mask = bin_indices < len(sizes)
+        
+        # Assign sizes for valid bins
+        mapped_sizes[valid_mask] = sizes[bin_indices[valid_mask]]
+        
+        # Log warnings for out-of-range values
+        n_out_of_range = np.sum(~valid_mask)
+        if n_out_of_range > 0:
+            max_threshold = thresholds[-1]
+            logger.warning(
+                f"{n_out_of_range} count value(s) exceed maximum threshold "
+                f"({max_threshold}). These will be excluded from analysis."
+            )
+        
+        return mapped_sizes
+
     def get_instrument_type(self) -> str:
         """
         Get the detected or set instrument type.
@@ -194,29 +657,52 @@ class ParticleDataProcessor:
                 - encoding: str (if successful)
                 - error: str (if failed)
                 - total_lines: int (if successful)
-                - sample_columns: list (if successful)
+                - column_names: list (if successful)
         """
         # First, detect instrument type
         detected_instrument = self.detect_instrument_type(file_path)
         
+        # Parse calibration data (Sizes/Thresholds)
+        calibration_data = self._parse_calibration_data(file_path)
+        
+        # Add calibration to instrument info
+        detected_instrument['calibration'] = calibration_data
+
         for encoding in SUPPORTED_CSV_ENCODINGS:
             try:
+                # Find the data start line (marked by ****)
+                data_start_line = 0
+                with open(file_path, 'r', encoding=encoding) as f:
+                    for line_num, line in enumerate(f):
+                        if line.strip().startswith('****'):
+                            data_start_line = line_num + 1  # Columns are on next line
+                            break
+                
                 # Get total line count
                 with open(file_path, 'r', encoding=encoding) as f:
                     total_lines = sum(1 for _ in f)
                 
-                # Try to parse a small sample to get column info
+                # Get column names by skipping to data start
                 try:
-                    sample_df = pd.read_csv(file_path, nrows=5, encoding=encoding)
-                    sample_columns = sample_df.columns.tolist()
-                except Exception:
-                    sample_columns = []
+                    if data_start_line > 0:
+                        # Read from where actual data starts
+                        sample_df = pd.read_csv(file_path, skiprows=data_start_line, 
+                                               nrows=5, encoding=encoding)
+                    else:
+                        # No separator found, try reading normally
+                        sample_df = pd.read_csv(file_path, nrows=5, encoding=encoding)
+                    
+                    column_names = sample_df.columns.tolist()
+                    logger.debug(f"Found {len(column_names)} columns starting at line {data_start_line}")
+                except Exception as e:
+                    logger.warning(f"Failed to parse sample columns: {e}")
+                    column_names = []
                 
                 return {
                     'success': True,
                     'encoding': encoding,
                     'total_lines': total_lines,
-                    'sample_columns': sample_columns,
+                    'column_names': column_names,
                     'instrument_info': detected_instrument
                 }
                 
@@ -257,7 +743,21 @@ class ParticleDataProcessor:
         
         # Use the detected encoding to load the full dataset
         encoding = metadata['encoding']
+
+        # Detect file format (HK vs PBP)
+        file_format = self._detect_file_format(metadata)
+        self.instrument_info['file_format'] = file_format
         
+        logger.info(f"File format detected: {file_format.upper()}")
+        
+        # Route to appropriate loader
+        if file_format == 'hk':
+            return self._load_hk_data(file_path, metadata, skip_rows)
+        else:
+            # For now, fall through to existing PBP loading logic
+            logger.info("Loading as PBP format (existing logic)")
+ 
+
         try:
             # Load CSV with row skipping
             if skip_rows > 0:
@@ -436,8 +936,8 @@ class ParticleDataProcessor:
                 'success': True,
                 'preview_lines': preview_lines,
                 'total_lines': metadata['total_lines'],
-                'detected_columns': len(metadata['sample_columns']),
-                'column_names': metadata['sample_columns'],
+                'detected_columns': len(metadata['column_names']),
+                'column_names': metadata['column_names'],
                 'encoding_used': encoding,
                 'instrument_type': metadata['instrument_info']['name']
             }
